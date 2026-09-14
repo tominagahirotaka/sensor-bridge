@@ -197,13 +197,16 @@ def shift_image(im, t, f, offset):
 
 
 def plot_timeinterval_histogram(win, time):
-    diff_timeinterval = np.diff(time) * 1000
+    # 単位は秒のまま渡す。pyqtgraphのAxisItemはunits='s'から自動でms/us等の
+    # SI接頭辞を選んで表示するため、ここで先にmsへ換算して単位も'ms'にすると、
+    # 間隔が1ms未満(高ODR等)の場合に「m」が二重に付き"(mms)"という誤表示になる。
+    diff_timeinterval = np.diff(time)
     title = tr('pu.time_interval_histogram_title')
     plt = win.addPlot(title=title)               # プロット領域を追加
     optimal_bins = auto_bins(diff_timeinterval)  # or get_optimal_bins(diff_timeinterval)
     y, x = np.histogram(diff_timeinterval, bins=optimal_bins)
     plt.plot(x, y, stepMode=True, fillLevel=0, brush=(0, 0, 255, 150))  # ヒストグラム描画
-    plt.setLabels(left='Count', bottom=('Time Interval', 'ms'))        # 軸ラベル設定
+    plt.setLabels(left='Count', bottom=('Time Interval', 's'))         # 軸ラベル設定
     plt.showGrid(x=True, y=True)                                       # グリッド表示
     return plt
 

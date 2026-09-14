@@ -3,10 +3,12 @@ __pycache__/
 *.pyo
 
 # generated data / exports (kept locally, not versioned)
+# board .ini dir_name values: data, data_LIS3DH, data_SHT35
 data/*.dat
 data/*.cpt
 data/*.csv
 data/*.xlsx
+data_*/
 *.pdf
 
 .DS_Store
