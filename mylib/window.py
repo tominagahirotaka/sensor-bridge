@@ -8,13 +8,14 @@ import sys
 import time
 
 from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtWidgets import (QDateEdit, QHBoxLayout, QLabel, QLineEdit,
                              QMainWindow, QStatusBar, QStyle, QVBoxLayout,
                              QWidget)
-# QDateEdit/QLineEdit/QStyle look unused here, but board .ini [code] sections
-# (subject_template, menubar, ...) exec()/eval() against this module's
-# globals() and construct them by bare name -- keep them importable.
+# QDateEdit/QIcon/QLineEdit/QStyle look unused here, but board .ini [code]
+# sections (subject_template, menubar, window_setting, ...) exec()/eval()
+# against this module's globals() and construct them by bare name -- keep
+# them importable.
 
 import mylib.Qtutils as Qtu
 import mylib.utils as utils

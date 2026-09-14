@@ -10,7 +10,6 @@ from collections import deque
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtCore import QDate, Qt
-from PyQt5.QtGui import QIcon  # unused here; default.ini's window_setting exec()s QIcon(...)
 from PyQt5.QtWidgets import (QAction, QCalendarWidget, QComboBox, QDialog,
                              QGridLayout, QHBoxLayout, QLabel, QLCDNumber,
                              QPushButton, QSizePolicy, QSpinBox, QVBoxLayout,
