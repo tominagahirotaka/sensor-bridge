@@ -554,12 +554,28 @@ class FigureQtPG:
             p_idxs = utils.find_peaks(
                 hy, amp_thre=self.average[k][j][i], local_width=self.PEAK_LOCAL_WIDTH,
                 min_peak_distance=min_peak_distance)
+            n_raw = len(p_idxs)
 
             # ウィンドウの右端付近(直近local_width点)はfind_peaksの端点パディング
             # (右端をlocal_width回複製する)により、まだ下降が確認できていない点でも
             # 自分自身の複製とtieして極大/極小と誤判定されうる。信頼できない候補として除外する。
             if len(p_idxs) > 0:
                 p_idxs = p_idxs[p_idxs < len(hy) - self.PEAK_LOCAL_WIDTH]
+
+            # --debug時のみ: なぜPeakが見つからない/HRが更新されないのかを追える簡易ログ。
+            # (k,j,i)ごとに約1秒おき(PEAK_HISTORY/2回に1回)だけ出す。
+            cnt_dict = getattr(self, '_peak_debug_count', None)
+            if cnt_dict is None:
+                cnt_dict = self._peak_debug_count = {}
+            key = (k, j, i)
+            cnt_dict[key] = cnt_dict.get(key, 0) + 1
+            if cnt_dict[key] % max(1, self.PEAK_HISTORY // 2) == 0:
+                debug_print(
+                    self.top_args,
+                    f'peak k={k} j={j} i={i}: y_range=({hy.min():.3f},{hy.max():.3f}) '
+                    f'amp_thre={self.average[k][j][i]:.4f} min_peak_distance={min_peak_distance} '
+                    f'n_candidates_raw={n_raw} n_after_edge_filter={len(p_idxs)} '
+                    f'peak_interval={self.peak_interval[k][j][i]:.4f}')
 
             if len(p_idxs) > 0:
                 # 最新のpeakのみ使用（履歴の中央付近）
