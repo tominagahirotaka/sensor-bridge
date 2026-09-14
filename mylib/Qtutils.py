@@ -58,12 +58,13 @@ def setQComboBox(self, items):
 
 def setQAction(self, name, func, Icon=None):
     action = QAction(Icon, '&' + name, self) if Icon is not None else QAction('&' + name, self)
-    # Ctrl+<大文字1文字>をShortcutにする慣習（例: "mArk"->Ctrl+A）。
+    # nameに含まれる大文字1文字ごとにCtrl+<文字>のShortcutを割り当てる慣習
+    # （例: "MArk"->Ctrl+M と Ctrl+A の両方でこのActionを実行できる）。
     # 日本語等、大文字を含まないnameの場合はShortcutを割り当てない（Menu自体は使える）。
-    shortcut_letters = re.findall('[A-Z]', name)
-    if shortcut_letters:
-        modifier = 'Meta+' if sys.platform == 'darwin' else 'Ctrl+'
-        action.setShortcut(modifier + shortcut_letters[0])
+    modifier = 'Meta+' if sys.platform == 'darwin' else 'Ctrl+'
+    shortcuts = [modifier + letter for letter in re.findall('[A-Z]', name)]
+    if shortcuts:
+        action.setShortcuts(shortcuts)
     action.setStatusTip(name)
     action.triggered.connect(func)
     return action
