@@ -650,6 +650,7 @@ class MainWindow(QMainWindow):
                           'plot_data', 'mavg_curves'):
                 if hasattr(self, stale):
                     delattr(self, stale)
+            self.derivatives.setVisible(False)  # ImageItem系にはDerivatives(1st/2nd)は無関係
             self.image_data = graph_func[self.graph_id](self)
             self.plots.set_title(self.image_data.title)
             self.img, self.colorbar, self.region_mgr, self.cross_hair = pltutils.plot_scalogram(
@@ -659,6 +660,7 @@ class MainWindow(QMainWindow):
             for stale in ('img', 'colorbar', 'image_data'):
                 if hasattr(self, stale):
                     delattr(self, stale)
+            self.derivatives.setVisible(True)
             self.plot_data = graph_func[self.graph_id](self)  # self を渡すことで lambda(obj) が使える
             self.plots.set_title(self.plot_data.title)
             self.curves, self.p_base_plot, self.region_mgr, self.cross_hair = pltutils.plot_timeseries(
