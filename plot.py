@@ -16,7 +16,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-import pyqtgraph as pg
 from PyPDF2 import PdfMerger
 from PyQt5.QtCore import Qt, QSizeF, QTimer
 from PyQt5.QtGui import QIcon, QPainter, QPdfWriter, QPixmap
@@ -638,13 +637,28 @@ class MainWindow(QMainWindow):
         if self.graph_id in wavelet_lst:
             self.wv_data, self.energy, self.power, self.max_power_freq, self.max_power_bpm = self.future.result()
 
-        self.remove_plts()
+        # PlotItem/ViewBoxを使い回さず、open_file_select_dialog()と同じ手順で毎回作り直す。
+        # 過去にPlotItemを使い回すと(特にPowerSpectra/Scalogramのようにcurve/colorbar/
+        # imageが入れ替わるとき)"wrapped C/C++ object ... has been deleted"というクラッシュが
+        # 再現したため(pyqtgraph/Qtのオブジェクト寿命管理起因、都度作り直すことで回避する)。
+        self.win.clear()
+        self.plots.remove_right_axes()
+        self.plots = pltutils.InitPlots(self.win, self.num_plots)
         if self.graph_id in image_lst:    # ImageItem (Scalogram)
+            # 前回がPlotItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
+            for stale in ('curves', 'p_base_plot', 'derivative_curves', 'peaks', 'valleys',
+                          'plot_data', 'mavg_curves'):
+                if hasattr(self, stale):
+                    delattr(self, stale)
             self.image_data = graph_func[self.graph_id](self)
             self.plots.set_title(self.image_data.title)
             self.img, self.colorbar, self.region_mgr, self.cross_hair = pltutils.plot_scalogram(
                 self.plots, self.image_data)
         else:                        # PlotItem
+            # 前回がImageItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
+            for stale in ('img', 'colorbar', 'image_data'):
+                if hasattr(self, stale):
+                    delattr(self, stale)
             self.plot_data = graph_func[self.graph_id](self)  # self を渡すことで lambda(obj) が使える
             self.plots.set_title(self.plot_data.title)
             self.curves, self.p_base_plot, self.region_mgr, self.cross_hair = pltutils.plot_timeseries(
@@ -667,24 +681,6 @@ class MainWindow(QMainWindow):
         self.title_label.setText(self.window_title + "\n" + self.plots.title)
         if self.args.pdffile:
             append_window_to_pdf(self, output_pdf)
-
-    def remove_plts(self):
-        self.plots.clear_plts_p_base()
-        # right axis のcurve を消す
-        if hasattr(self, 'derivative_curves'):
-            for p2, curves in zip(self.plots.plts_right, self.derivative_curves):
-                for curve in curves:
-                    p2.removeItem(curve)
-
-        # image描画時，ColorBarItemも描画した際，これを削除するため
-        if hasattr(self, 'colorbar'):
-            for cb in self.colorbar:
-                if isinstance(cb, pg.ColorBarItem):
-                    cb.setParentItem(None)       # 親から切り離す
-                    scene = cb.scene()
-                    if scene is not None:
-                        cb.scene().removeItem(cb)  # シーンから完全に削除
-            del self.colorbar
 
     def select_graph(self):
         # 選択されたアクションのテキストを取得
