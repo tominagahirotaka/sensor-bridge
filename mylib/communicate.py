@@ -251,7 +251,8 @@ class Board:
             return
         # boardからの応答を待つ
         board_params = self._waiting('setparams')
-        self.p.env_set.update(dict([k.split('=') for k in board_params.split(';')]))
+        # 値自体に'='を含む場合(LIS3DHのfuncのx>=32768等)があるため、最初の'='でのみ分割する。
+        self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
         # boardから受け取った変数を self. 変数に加工
         self.set_self_vars()
         self._build_struct()
@@ -290,7 +291,8 @@ class Board:
         # boardからの応答を待つ 'setparams'
         board_params = self._waiting('setparams')
         print(f'[INFO] {board_params=}')
-        self.p.env_set.update(dict([k.split('=') for k in board_params.split(';')]))
+        # 値自体に'='を含む場合(LIS3DHのfuncのx>=32768等)があるため、最初の'='でのみ分割する。
+        self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
         # boardから受け取った変数を self. 変数に加工
         self.set_self_vars()
         self._build_struct()
