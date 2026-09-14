@@ -203,8 +203,16 @@ def plot_timeinterval_histogram(win, time):
     diff_timeinterval = np.diff(time)
     title = tr('pu.time_interval_histogram_title')
     plt = win.addPlot(title=title)               # プロット領域を追加
-    optimal_bins = auto_bins(diff_timeinterval)  # or get_optimal_bins(diff_timeinterval)
-    y, x = np.histogram(diff_timeinterval, bins=optimal_bins)
+    # チェックポイント等による稀な大きな間隔をそのまま等幅binの範囲に含めると、
+    # 大多数のサンプル間隔が全体幅の1%にも満たない1binへ押し込まれてしまい、
+    # 「ヒストグラムと書いてあるのに実質1本の細い針にしか見えない」状態になる。
+    # ヒストグラムは本来binの面積(=幅×高さ)が意味を持つべきなので、表示範囲は
+    # 分布の主要部分(1〜99パーセンタイル)に絞り、外れ値は両端のbinへ
+    # まとめて含める(np.clip)ことで、実データの分布形状が見えるようにする。
+    lo, hi = np.percentile(diff_timeinterval, [1, 99])
+    display_data = np.clip(diff_timeinterval, lo, hi) if hi > lo else diff_timeinterval
+    optimal_bins = auto_bins(display_data)  # or get_optimal_bins(display_data)
+    y, x = np.histogram(display_data, bins=optimal_bins)
     plt.plot(x, y, stepMode=True, fillLevel=0, brush=(0, 0, 255, 150))  # ヒストグラム描画
     plt.setLabels(left='Count', bottom=('Time Interval', 's'))         # 軸ラベル設定
     plt.showGrid(x=True, y=True)                                       # グリッド表示
