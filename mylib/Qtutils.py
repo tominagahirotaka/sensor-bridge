@@ -50,9 +50,16 @@ def setQLCDNumber(self, style=None, digitcount=None):
     return lcd
 
 
-def setQComboBox(self, items):
+def setQComboBox(self, items, data=None):
+    """items: 表示Textのlist。data: 各項目に紐づける実際の値のlist(省略時はTextがそのまま値になる、
+    従来通りの挙動)。例: setQComboBox(self, ['1Hz', '10Hz'], data=['1', '2'])とすると、
+    表示は'1Hz'/'10Hz'のまま、選択結果(setQDialog経由)は'1'/'2'になる。"""
     cbox = QComboBox(self)
-    cbox.addItems(items)
+    if data is not None:
+        for text, value in zip(items, data):
+            cbox.addItem(text, value)
+    else:
+        cbox.addItems(items)
     return cbox
 
 
@@ -162,7 +169,13 @@ class setQDialog(QDialog):
             if key not in self.template.keys():
                 continue
             if 'ComboBox' in self.template[key][2]:
-                self.template[key][1].setCurrentIndex(self.template[key][1].findText(val))
+                cbox = self.template[key][1]
+                # data付きComboBox(setQComboBox(..., data=[...]))はfindDataで、
+                # 従来通りTextがそのまま値のComboBoxはfindTextで現在値を復元する。
+                idx = cbox.findData(val)
+                if idx < 0:
+                    idx = cbox.findText(val)
+                cbox.setCurrentIndex(idx)
             elif 'DateEdit' in self.template[key][2]:
                 self.template[key][1].setDate(QDate(int(val[0:4]), int(val[5:7]), int(val[8:10])))
             elif 'Calendar' in self.template[key][2]:
@@ -188,7 +201,8 @@ class setQDialog(QDialog):
         tmp = {}
         for key, cont in self.template.items():
             if 'ComboBox' in cont[2]:
-                tmp[key] = cont[1].currentText()
+                data = cont[1].currentData()
+                tmp[key] = data if data is not None else cont[1].currentText()
             elif 'Calendar' in cont[2]:
                 tmp[key] = cont[1].selectedDate().toString("yyyyMMdd")
             elif 'MultiSpinBox' in cont[2]:
