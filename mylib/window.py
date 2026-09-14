@@ -133,7 +133,7 @@ class ApplicationWindow(QMainWindow):
         if 'before_subject_window' in self.code:
             exec(self.code['before_subject_window'], globals(), locals())  # Pre-Processing
         qDia = Qtu.setQDialog(self.subject, self.args, template=templ,
-                              title=t('window.subject_dialog_title'))
+                              title=t('window.subject_dialog_title'), fixedwidth=200)
         qDia.exec_()
         debug_print(self.args, f'{qDia.result=}')
         # Check subject changed?
