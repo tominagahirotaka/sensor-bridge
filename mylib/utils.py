@@ -129,7 +129,7 @@ def calc_target_Calbonen_age(age, resting_heart_rate, strength):
     """Target heart rate via the Karvonen formula, given age directly."""
     try:
         HR = int(resting_heart_rate)
-    except ValueError:
+    except (ValueError, TypeError):
         HR = 0
     return (220 - age - HR) * strength / 100 + HR
 
@@ -171,6 +171,7 @@ def find_peaks(a, amp_thre, local_width=1, min_peak_distance=1):
 
 def average_heart_rate(bloodP):
     """Average of the numeric heart-rate readings in the subject dialog's blood-pressure rows.
-    Returns None when no row has a numeric reading (e.g. the field was left blank)."""
+    Returns 0 when no row has a numeric reading (e.g. the field was left blank), matching
+    calc_target_Calbonen_age()'s own no-data-> 0 fallback (the two are used together)."""
     vals = [int(val[3]) for val in bloodP if val[3].isdigit()]
-    return np.average(vals) if vals else None
+    return np.average(vals) if vals else 0
