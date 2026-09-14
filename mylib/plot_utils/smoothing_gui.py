@@ -510,11 +510,7 @@ class SignalSmoothingWindow(QWidget):
             if num_history == 0:
                 continue
             del self.history[idx][-1]
-            if num_history > 1:
-                self.apply_history(idx)
-            else:
-                self.history_label[idx].setText(tr('pu.history_prefix'))
-                self.filtered_plot[idx].hide()
+            self.apply_history(idx)  # 履歴が空になった場合もapply_historyが元データへ戻す
 
         # ループ後にAllタブのラベルを最新状態に更新
         if is_all and 'all' in self.history_label:
@@ -533,6 +529,13 @@ class SignalSmoothingWindow(QWidget):
         idxs = [idxs] if isinstance(idxs, int) else idxs
         for idx in idxs:
             if len(self.history[idx]) == 0:
+                # 履歴が空なのにself.dataが直前のフィルタ結果のまま残ると、「history=[]な
+                # のにdataはフィルタ済み」という矛盾が生じる(Undoで最後の1件を消した直後や、
+                # 空historyのLoadで再現する)。元データへ戻し、表示も揃える。
+                self.data.data[idx] = self.original_data.data[idx]
+                self.history_label[idx].setText(tr('pu.history_prefix'))
+                if self.filtered_plot[idx]:
+                    self.filtered_plot[idx].hide()
                 continue
             print(f'Loaded {self.history=}')
             sf = SignalFilter(self.original_data.data[idx])
