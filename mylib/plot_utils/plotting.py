@@ -179,6 +179,7 @@ def plot_scalogram(plots, xyz):
     im, cb = mk_image0(plots.p_base, justify='right', values=(np.min(r), np.max(r)), ax_label=None)
     im.setImage(r.T)
     im.setRect(pg.QtCore.QRectF(t[0], f[0], t[-1] - t[0], f[-1] - f[0]))
+    set_axis_label(plots.p_base, xyz.xlabel)  # x軸ラベル（plot_timeseries同様、都度明示的に設定）
 
     region_mgr = RegionManager(plots.p_base, im, plots.plts)
     colorbar.append(cb)
