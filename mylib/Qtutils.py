@@ -223,6 +223,7 @@ class FigureQtPG:
     """
 
     PEAK_HISTORY_WINDOW_SEC = 2.0  # Peak検出用の履歴バッファが保持する秒数
+    PEAK_LOCAL_WIDTH = 2  # find_peaksのlocal_width。境界除外幅としても使う
 
     def __init__(self, board, figs, args):
         self.board = board
@@ -544,16 +545,27 @@ class FigureQtPG:
             min_peak_distance = int(
                 self.board.min_peak_dist / (hx[-1] - hx[0]) * self.PEAK_HISTORY)
             p_idxs = utils.find_peaks(
-                hy, amp_thre=self.average[k][j][i], local_width=2,
+                hy, amp_thre=self.average[k][j][i], local_width=self.PEAK_LOCAL_WIDTH,
                 min_peak_distance=min_peak_distance)
+
+            # ウィンドウの右端付近(直近local_width点)はfind_peaksの端点パディング
+            # (右端をlocal_width回複製する)により、まだ下降が確認できていない点でも
+            # 自分自身の複製とtieして極大/極小と誤判定されうる。信頼できない候補として除外する。
+            if len(p_idxs) > 0:
+                p_idxs = p_idxs[p_idxs < len(hy) - self.PEAK_LOCAL_WIDTH]
 
             if len(p_idxs) > 0:
                 # 最新のpeakのみ使用（履歴の中央付近）
                 p_idx = p_idxs[-1]
-                peak_x = hx[p_idx] % self.board.time_width
-                peak_y = hy[p_idx]
-                self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
-                self.peak_time[k][j][i][-1] = hx[p_idx]
-                self.peak_interval[k][j][i] = np.average(
-                    np.diff(self.peak_time[k][j][i]))
-                self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])
+                # PEAK_HISTORYがdeque(maxlen)である以上この分岐はバッファが埋まった
+                # 後も毎サンプル真になるため、「新しいPeakかどうか」をここで判定しない
+                # と、同一Peakを毎回再検出してpeak_time(直近3件)の履歴を重複で埋め潰し、
+                # peak_interval(ひいては心拍数)が実際より大幅に短く算出されてしまう。
+                if hx[p_idx] > self.peak_time[k][j][i][-1]:
+                    peak_x = hx[p_idx] % self.board.time_width
+                    peak_y = hy[p_idx]
+                    self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
+                    self.peak_time[k][j][i][-1] = hx[p_idx]
+                    self.peak_interval[k][j][i] = np.average(
+                        np.diff(self.peak_time[k][j][i]))
+                    self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])
