@@ -1,0 +1,12 @@
+numpy
+scipy
+pyqtgraph
+PyQt5
+pyserial
+matplotlib
+pandas
+PyPDF2
+seaborn
+openpyxl
+xlsxwriter
+swan

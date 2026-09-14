@@ -1,0 +1,34 @@
+QLCDNumber {
+    font:bold 36px;
+    color:blue;
+    background-color: white;
+}
+QLabel {
+    font:bold 36px;
+    color: black;
+}
+QPushButton {
+    font:bold 40px;
+    border:4px solid #8f8f91;
+    border-radius:12px; min-width:80px;
+    background-color:qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f6f7fa, stop:1 #808080);
+}
+QPushButton:pressed {
+    background-color:qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #808080, stop:1 #f6f7fa);
+}
+QLineEdit {
+    font:bold 36px;
+    color:blue;
+    background-color: white;
+}
+QComboBox {
+    font:bold 36px;
+    color:blue;
+    background-color: white;
+}
+QDateEdit {
+    font:bold 36px;
+    color:blue;
+    background-color: white;
+}
+

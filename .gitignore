@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+
+# generated data / exports (kept locally, not versioned)
+data/*.dat
+data/*.cpt
+data/*.csv
+data/*.xlsx
+*.pdf
+
+.DS_Store
