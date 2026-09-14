@@ -309,7 +309,11 @@ class ReadData():
         # debug_print(self.args, f"{self.board.p.env_set['func']=}")
 
     def makeTitle(self):                         # title設定
-        if len(self.header.subject) != 0:
+        # Subjectダイアログを「Nameを入力せずOK」で閉じた場合、GenderのComboBoxやDateEditの
+        # 生年月日はWidgetの既定値(例: Male / 2000-01-01)のまま自己申告データとして残ってしまう
+        # (例: 何も設定していないのに「Male(26)」のような偽のTitleが出る)。Nameが空なら
+        # Subjectは実質未設定とみなし、Titleへは反映しない。
+        if len(self.header.subject) != 0 and str(self.header.subject.get('name', '')).strip():
             if 'birth' not in self.header.subject:
                 self.title = ';'.join(
                     [f'{key}:{val} ' for key, val in self.header.subject.items()])
@@ -319,7 +323,6 @@ class ReadData():
             else:
                 age = self.header.subject['age']
             self.title = f"{self.header.subject['name']} {self.header.subject['gender']}({age})"
-# '%s %s(%s)' % (self.header.subject['name'], self.header.subject['gender'],age)
         else:
             self.title = ''  # 'Plot program'
 
