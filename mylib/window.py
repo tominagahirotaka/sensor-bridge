@@ -155,7 +155,7 @@ class ApplicationWindow(QMainWindow):
             self.args,
             template=templ,
             title=t('window.param_dialog_title'),
-            fixedwidth=360)
+            fixedwidth=400)
         qDia.exec_()
         if self.rcv.p.env_set == qDia.result:
             return None           # Check changed or not?
