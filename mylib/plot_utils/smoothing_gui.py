@@ -564,6 +564,26 @@ class SignalSmoothingWindow(QWidget):
             self.apply_history(idx)
 
 
+# LIS3DH(加速度センサー)のRegister Codeそのままでは意味が分からないため、Header Viewerでの
+# 表示用に人が読める値を対応付ける。odr/fs はLIS3DH.ini、odr1/odr2/fs1/fs2は2台のLIS3DHを
+# 積んだDPG_X95840W_LIS3DHx2.iniが使うKey名(どちらも同じLIS3DHのRegister値)。
+_LIS3DH_ODR_LABELS = {
+    '1': '1Hz', '2': '10Hz', '3': '25Hz', '4': '50Hz', '5': '100Hz',
+    '6': '200Hz', '7': '400Hz', '8': '1.6kHz(LP only)', '9': '1.344kHz/5.376kHz(LP)',
+}
+_LIS3DH_FS_LABELS = {'0': '±2g', '1': '±4g', '2': '±8g', '3': '±16g'}
+
+
+def _describe_env_set_value(key, value):
+    """odr/fs系のKeyはRegister Codeの横に人が読める説明を括弧書きで加える。それ以外はstr(value)のまま。"""
+    text = str(value)
+    if key in ('odr', 'odr1', 'odr2') and text in _LIS3DH_ODR_LABELS:
+        return f'{text} ({_LIS3DH_ODR_LABELS[text]})'
+    if key in ('fs', 'fs1', 'fs2') and text in _LIS3DH_FS_LABELS:
+        return f'{text} ({_LIS3DH_FS_LABELS[text]})'
+    return text
+
+
 class TabWindow(QDialog):
     """タブウィジェットを表示する別ウィンドウ"""
 
@@ -619,7 +639,7 @@ class TabWindow(QDialog):
             if isinstance(lst, list):
                 value = ", ".join(map(str, lst))  # リストの場合は結合して表示
             else:
-                value = str(lst)  # リストでない場合はそのまま文字列化
+                value = _describe_env_set_value(key, lst)  # 例: odr='7' -> '7 (400Hz)'
             table_widget.setItem(row_idx, 1, QTableWidgetItem(value))
 
 #
