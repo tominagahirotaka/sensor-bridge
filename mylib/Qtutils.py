@@ -289,10 +289,7 @@ class FigureQtPG:
         # _init_fig の先頭に一時追加
         debug_print(self.top_args, f'    {self.board.__dict__=}')
 
-        # バッファサイズ
-# self._buf_size = getattr(self.board, 'num_points', 2000)
-# self._x_grid   = np.linspace(0, self.board.time_width, self._buf_size, endpoint=False)
-        # 初期化（_init_buffers で上書きされる）
+        # バッファサイズ（_init_buffers で実測dtを基に上書きされるまでの仮初期化）
         self._buf_size = 1      # ← None だと np.full でエラーになるため仮値
         self._x_grid = np.array([0.0])
         self._buf_y = None

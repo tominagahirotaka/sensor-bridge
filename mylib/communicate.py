@@ -274,7 +274,6 @@ class Board:
         exclusion_list = [
             'title',
             'dir_name',
-            'num_points',
             'min_peak_dist',
             'time_width',
             'func',
