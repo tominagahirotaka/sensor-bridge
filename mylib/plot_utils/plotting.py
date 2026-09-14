@@ -233,21 +233,33 @@ def find_peaks_in_timeseries(t, y, height=None, distance=None, prominence=None):
 
 
 # For Histogram
+# ほぼ一定間隔のDataに外れ値が混じるとbin幅がほぼ0になり、bin数が爆発して
+# np.histogramがメモリ不足を起こすため上限を設ける。
+MAX_AUTO_BINS = 1000
+
+
 def auto_bins(data):
     # Freedman-Diaconisの方法
     iqr = np.percentile(data, 75) - np.percentile(data, 25)
+    data_range = np.max(data) - np.min(data)
+    if iqr <= 0 or data_range <= 0:
+        return 10
     h = 2 * iqr / (len(data) ** (1 / 3))  # bin幅
-    bins = int((np.max(data) - np.min(data)) / h)
-    return max(10, bins)  # 最低10bins
+    bins = int(data_range / h)
+    return min(max(10, bins), MAX_AUTO_BINS)  # 最低10bins、最大MAX_AUTO_BINS bins
 
 # または
 
 
 def get_optimal_bins(data):
     # Scottの標準偏差に基づく方法
-    h = 3.49 * np.std(data) * (len(data) ** (-1 / 3))
-    bins = int((np.max(data) - np.min(data)) / h)
-    return max(10, bins)
+    std = np.std(data)
+    data_range = np.max(data) - np.min(data)
+    if std <= 0 or data_range <= 0:
+        return 10
+    h = 3.49 * std * (len(data) ** (-1 / 3))
+    bins = int(data_range / h)
+    return min(max(10, bins), MAX_AUTO_BINS)
 
 
 class CrossHairManager:
