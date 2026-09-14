@@ -141,6 +141,12 @@ MESSAGES = {
         "en": "[INFO] Thread: [get_data_and_write] Stopped",
         "ja": "[INFO] Thread: [get_data_and_write] 停止",
     },
+    "comm.thread_serial_error": {
+        "en": "[ERROR] Serial read failed ({err}); the board may have disconnected. "
+              "Stopping acquisition -- press Test/Run to reconnect.",
+        "ja": "[ERROR] Serial読み込みに失敗しました({err})。Boardが切断された可能性があります。"
+              "取得を停止します -- 再接続するにはTest/Runを押してください。",
+    },
 
     # --- plot.py: argparse description & --config ---
     "plot.description": {

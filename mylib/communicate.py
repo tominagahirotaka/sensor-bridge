@@ -298,30 +298,41 @@ class Board:
     def get_data_no_write(self):
         print(t('comm.thread_no_write_start'))
         while self.loop_th:
-            self.ser_data = self.ser.read(self.one_data_size)
+            try:
+                self.ser_data = self.ser.read(self.one_data_size)
+            except serial.SerialException as exc:
+                # USB切断・瞬断等。Threadをクラッシュさせず、Stop相当の後処理へ進む。
+                print(t('comm.thread_serial_error', err=exc))
+                self.loop_th = False
+                break
             self._data_ready.set()      # 初回待機解除用
             self._new_data_event.set()  # 新データ到着を通知
-        self.ser.reset_output_buffer()
-        self.ser.reset_input_buffer()
-        print(t('comm.thread_no_write_stopped'))
         try:
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
             self.ser.write(b"r")
         except serial.SerialException:
             pass
+        print(t('comm.thread_no_write_stopped'))
 
     def get_data_and_write(self, f):
         while self.loop_th:
-            self.ser_data = self.ser.read(self.one_data_size)
+            try:
+                self.ser_data = self.ser.read(self.one_data_size)
+            except serial.SerialException as exc:
+                print(t('comm.thread_serial_error', err=exc))
+                self.loop_th = False
+                break
             self._data_ready.set()
             self._new_data_event.set()  # 新データ到着を通知
             f.write(self.ser_data)
-        self.ser.reset_output_buffer()
-        self.ser.reset_input_buffer()
-        print(t('comm.thread_write_stopped'))
         try:
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
             self.ser.write(b"r")
         except serial.SerialException:
             pass
+        print(t('comm.thread_write_stopped'))
 
     def convert(self, s):
         # struct.unpack_fromで一括デコード（Cレベル、高速）
