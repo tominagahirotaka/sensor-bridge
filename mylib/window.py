@@ -5,7 +5,6 @@ Mark buttons, and refreshes the plot + LCD readouts on a timer."""
 
 import platform
 import sys
-import time
 
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QFont, QIcon
@@ -107,7 +106,8 @@ class ApplicationWindow(QMainWindow):
         self.board.loop_th = False
         if self.rcv.init_flag:
             self.timer.stop()
-        time.sleep(2)
+        # th.join()自体が「読み取りThreadが実際に止まるまで」正しく待つので、
+        # 固定2秒sleepは不要な遅延だった(Stop/Quitのたびに最低2秒余分にかかっていた)。
         if hasattr(self.rcv, 'th'):
             self.rcv.th.join()
             print(t('window.reset_stop_thread'))
