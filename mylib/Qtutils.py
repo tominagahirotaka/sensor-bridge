@@ -224,6 +224,7 @@ class FigureQtPG:
 
     PEAK_HISTORY_WINDOW_SEC = 2.0  # Peak検出用の履歴バッファが保持する秒数
     PEAK_LOCAL_WIDTH = 2  # find_peaksのlocal_width。境界除外幅としても使う
+    AVERAGE_TIME_CONSTANT_SEC = 3.0  # Peak検出の閾値(self.average)に使う移動平均の時定数
 
     def __init__(self, board, figs, args):
         self.board = board
@@ -444,6 +445,11 @@ class FigureQtPG:
             [[np.full(self._buf_size, np.nan) for _ in dic['data']] for dic in lst]
             for lst in self.figs]
 
+        # Peak検出の閾値(self.average)用の移動平均係数。dtから時定数を逆算する。
+        # (旧実装は alpha=0.5 固定で信号にほぼ即座に追従してしまい、静穏区間で閾値が
+        #  ゼロ近くまで落ちて僅かなノイズもPeakとして拾ってしまっていた)
+        self._avg_alpha = min(1.0, dt / self.AVERAGE_TIME_CONSTANT_SEC)
+
         # peak検出用履歴バッファ
         self.PEAK_HISTORY = int(self.PEAK_HISTORY_WINDOW_SEC / dt)
         debug_print(self.top_args, f'PEAK_HISTORY={self.PEAK_HISTORY}, dt={dt:.6f}')
@@ -487,7 +493,8 @@ class FigureQtPG:
 
                         self._erase_and_write_buffer(k, j, i, x_prev, x_now, y_prev, y_now)
 
-                        self.average[k][j][i] = (self.average[k][j][i] + y_now) / 2
+                        self.average[k][j][i] = (self.average[k][j][i] * (1 - self._avg_alpha)
+                                                 + y_now * self._avg_alpha)
 
                         if dat[-1]['peak']:
                             self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
