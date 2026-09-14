@@ -309,20 +309,24 @@ class ReadData():
         # debug_print(self.args, f"{self.board.p.env_set['func']=}")
 
     def makeTitle(self):                         # title設定
-        # Subjectダイアログを「Nameを入力せずOK」で閉じた場合、GenderのComboBoxやDateEditの
-        # 生年月日はWidgetの既定値(例: Male / 2000-01-01)のまま自己申告データとして残ってしまう
-        # (例: 何も設定していないのに「Male(26)」のような偽のTitleが出る)。Nameが空なら
-        # Subjectは実質未設定とみなし、Titleへは反映しない。
-        if len(self.header.subject) != 0 and str(self.header.subject.get('name', '')).strip():
-            if 'birth' not in self.header.subject:
-                self.title = ';'.join(
-                    [f'{key}:{val} ' for key, val in self.header.subject.items()])
+        subject = self.header.subject
+        if 'birth' in subject:
+            # 被験者情報系Template(name/height/weight/birth/gender/...)。GenderのComboBoxや
+            # 生年月日のDateEditは未操作でも既定値(Male/2000-01-01等)を持つため、Nameが空なら
+            # Subjectダイアログは実質未入力とみなす(例: 何も設定していないのに
+            # 「Male(26)」のような偽のTitleが出るのを防ぐ)。
+            if not str(subject.get('name', '')).strip():
+                self.title = ''
                 return
-            elif 'age' not in self.header.subject:
-                age = utils.calc_age(self.header.subject['birth'], self.header.time['start_time'])
+            if 'age' not in subject:
+                age = utils.calc_age(subject['birth'], self.header.time['start_time'])
             else:
-                age = self.header.subject['age']
-            self.title = f"{self.header.subject['name']} {self.header.subject['gender']}({age})"
+                age = subject['age']
+            self.title = f"{subject['name']} {subject['gender']}({age})"
+        elif subject and any(str(val).strip() for val in subject.values()):
+            # birthを持たないTemplate(LIS3DHの実験Title/実験設定/MEMO等)。全FieldがQLineEdit
+            # 相当で「未操作でも値を持つ」Widgetが無いため、何か1つでも入力されていれば表示する。
+            self.title = ';'.join(f'{key}:{val} ' for key, val in subject.items())
         else:
             self.title = ''  # 'Plot program'
 
