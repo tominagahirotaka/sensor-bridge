@@ -480,24 +480,40 @@ class FigureQtPG:
             for k, lst in enumerate(self.figs):
                 for j, dic in enumerate(lst):
                     for i, dat in enumerate(dic['data']):
-                        plot_data = data_t[
-                            np.array(dat[:-1]) +
-                            np.array(dat[-1]['raw']) * len(self.board.structure)
-                        ]
+                        try:
+                            plot_data = data_t[
+                                np.array(dat[:-1]) +
+                                np.array(dat[-1]['raw']) * len(self.board.structure)
+                            ]
 
-                        # 現在の x 位置（0〜time_width）
-                        x_now = plot_data[0][-1] % self.board.time_width
-                        x_prev = plot_data[0][-2] % self.board.time_width
-                        y_now = plot_data[1][-1]   # ← 追加
-                        y_prev = plot_data[1][-2]   # ← 追加
+                            # 現在の x 位置（0〜time_width）
+                            x_now = plot_data[0][-1] % self.board.time_width
+                            x_prev = plot_data[0][-2] % self.board.time_width
+                            y_now = plot_data[1][-1]   # ← 追加
+                            y_prev = plot_data[1][-2]   # ← 追加
 
-                        self._erase_and_write_buffer(k, j, i, x_prev, x_now, y_prev, y_now)
+                            self._erase_and_write_buffer(k, j, i, x_prev, x_now, y_prev, y_now)
 
-                        self.average[k][j][i] = (self.average[k][j][i] * (1 - self._avg_alpha)
-                                                 + y_now * self._avg_alpha)
+                            self.average[k][j][i] = (self.average[k][j][i] * (1 - self._avg_alpha)
+                                                     + y_now * self._avg_alpha)
 
-                        if dat[-1]['peak']:
-                            self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
+                            if dat[-1]['peak']:
+                                self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
+                        except Exception:
+                            # PyQtはQTimer.timeout等のslot内で起きた例外を既定では画面上に
+                            # 出さずに握りつぶすため、原因不明のまま「何も起きない」ように
+                            # 見えてしまう。ここで明示的にtracebackを出し、以後は状況が
+                            # 変わらない限り毎サンプル出続けないよう最初の数回だけに絞る。
+                            err_count = getattr(self, '_update_err_count', None)
+                            if err_count is None:
+                                err_count = self._update_err_count = {}
+                            ekey = (k, j, i)
+                            err_count[ekey] = err_count.get(ekey, 0) + 1
+                            if err_count[ekey] <= 3:
+                                import traceback
+                                print(f'[ERROR] update() failed for k={k} j={j} i={i} '
+                                      f'(occurrence #{err_count[ekey]}):')
+                                traceback.print_exc()
 
         return data_t.T[[0, -1]].T, self.peak_interval.transpose()[0][0]
 
