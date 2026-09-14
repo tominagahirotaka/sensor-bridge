@@ -573,6 +573,19 @@ _LIS3DH_ODR_LABELS = {
 }
 _LIS3DH_FS_LABELS = {'0': '±2g', '1': '±4g', '2': '±8g', '3': '±16g'}
 
+_LIS3DH_KEY_LABELS = {
+    'odr': 'Output Data Rate', 'odr1': 'Output Data Rate', 'odr2': 'Output Data Rate',
+    'fs': 'Full Scale', 'fs1': 'Full Scale', 'fs2': 'Full Scale',
+}
+
+
+def _describe_env_set_key(key):
+    """odr/fs系のKeyは何の略かをそのまま併記する。それ以外はstr(key)のまま。"""
+    text = str(key)
+    if text in _LIS3DH_KEY_LABELS:
+        return f'{text} = {_LIS3DH_KEY_LABELS[text]}'
+    return text
+
 
 def _describe_env_set_value(key, value):
     """odr/fs系のKeyはRegister Codeの横に人が読める説明を括弧書きで加える。それ以外はstr(value)のまま。"""
@@ -633,7 +646,7 @@ class TabWindow(QDialog):
         table_widget.setColumnCount(2)  # キーと値の2列
 
         for row_idx, (key, lst) in enumerate(dic.items()):
-            table_widget.setItem(row_idx, 0, QTableWidgetItem(str(key)))
+            table_widget.setItem(row_idx, 0, QTableWidgetItem(_describe_env_set_key(key)))  # 例: odr -> 'odr = Output Data Rate'
 
             # lst がリストかどうか確認
             if isinstance(lst, list):
