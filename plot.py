@@ -69,7 +69,8 @@ graph_type = [
     # tooltip欄はi18nカタログのkey。setToolTip側でt()を呼ぶ（--lang解決前にこのリストが
     # 評価されるため、ここで直接t()すると常に起動時点の言語になってしまう）。
     ('Timeseries', lambda obj: obj.current_data, ['plot'], 'plot.tt.timeseries'),
-    ('PowerSpectra', lambda obj: obj.ps_data, ['plot'], 'plot.tt.powerspectra'),
+    # 'freq': X軸がTimeではなくFreq.(Hz)。Mark/Shift time等のTime系操作は無関係。
+    ('PowerSpectra', lambda obj: obj.ps_data, ['plot', 'freq'], 'plot.tt.powerspectra'),
     ('Scalogram', lambda obj: obj.wv_data, ['image', 'wavelet'],
      'plot.tt.scalogram'),
     ('Energy', lambda obj: obj.energy, ['plot', 'wavelet'],
@@ -109,10 +110,13 @@ def decompose_graph_type(graph_type):
     image = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'image' in modes]
     # 'wavelet' を含む index を取得
     wavelet = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'wavelet' in modes]
-    return (name, func, image, wavelet, tooltip)
+    # 'freq' (X軸がTimeでない) を含む index を取得
+    freq = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'freq' in modes]
+    return (name, func, image, wavelet, freq, tooltip)
 
 
-(graph_name, graph_func, image_lst, wavelet_lst, graph_tooltip) = decompose_graph_type(graph_type)
+(graph_name, graph_func, image_lst, wavelet_lst, freq_lst,
+ graph_tooltip) = decompose_graph_type(graph_type)
 
 graph_lst = {}
 graph_lst['Analog_Sensor'] = ['Timeseries', 'PowerSpectra', 'Scalogram']
@@ -651,6 +655,7 @@ class MainWindow(QMainWindow):
                 if hasattr(self, stale):
                     delattr(self, stale)
             self.derivatives.setVisible(False)  # ImageItem系にはDerivatives(1st/2nd)は無関係
+            self.peaks_check.setVisible(False)  # ImageItem系にはPeakも無関係
             self.image_data = graph_func[self.graph_id](self)
             self.plots.set_title(self.image_data.title)
             self.img, self.colorbar, self.region_mgr, self.cross_hair = pltutils.plot_scalogram(
@@ -661,6 +666,7 @@ class MainWindow(QMainWindow):
                 if hasattr(self, stale):
                     delattr(self, stale)
             self.derivatives.setVisible(True)
+            self.peaks_check.setVisible(True)
             self.plot_data = graph_func[self.graph_id](self)  # self を渡すことで lambda(obj) が使える
             self.plots.set_title(self.plot_data.title)
             self.curves, self.p_base_plot, self.region_mgr, self.cross_hair = pltutils.plot_timeseries(
@@ -679,6 +685,12 @@ class MainWindow(QMainWindow):
             visible = self.peaks_check.isChecked()
             for curve in self.peaks + self.valleys:
                 curve.setVisible(visible)
+        # PowerSpectra(FFT)はX軸がFreq.でTimeではないため、
+        # Mark/Select Mark/Shift timeといったTime系の操作UIは無関係。
+        has_time_axis = self.graph_id not in freq_lst
+        self.mark_check.setVisible(has_time_axis and len(self.data.cpt_list) > 0)
+        self.time_shift.setVisible(has_time_axis and len(self.data.cpt_list) > 0)
+        self.shift_layout.setVisible(has_time_axis)
         self.hide_show_plot()
         self.title_label.setText(self.window_title + "\n" + self.plots.title)
         if self.args.pdffile:
