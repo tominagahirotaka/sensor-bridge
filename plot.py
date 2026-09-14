@@ -52,6 +52,20 @@ def parse_filter_string(filter_str):
     return history
 
 
+def merge_filter_and_history(filter_dict, history_dict):
+    """defaultのFilterとSignalSmoothingWindowでの操作Historyを1つのdictへ合成する
+    （同じKeyはFilterが先、Historyが後の順で連結）。"""
+    merged = {}
+    all_keys = list(dict.fromkeys(list(filter_dict.keys()) + list(history_dict.keys())))
+    for key in all_keys:
+        merged[key] = []
+        if key in filter_dict:
+            merged[key].extend(filter_dict[key])  # filterが先
+        if key in history_dict:
+            merged[key].extend(history_dict[key])  # historyが後
+    return merged
+
+
 graph_type = [
     # tooltip欄はi18nカタログのkey。setToolTip側でt()を呼ぶ（--lang解決前にこのリストが
     # 評価されるため、ここで直接t()すると常に起動時点の言語になってしまう）。
@@ -105,6 +119,15 @@ graph_lst = {}
 graph_lst['Analog_Sensor'] = ['Timeseries', 'PowerSpectra', 'Scalogram']
 graph_lst['SHT35'] = ['Timeseries', 'PowerSpectra', 'Scalogram']
 graph_lst['LIS3DH'] = ['Timeseries', 'PowerSpectra', 'Scalogram']
+
+
+def resolve_graph_visibility(board_prog, graph_lst, graph_name):
+    """board_prog(Boardのtitle)に対応するgraph_lstのEntryを探し、graph_nameの各要素が
+    そのBoardで表示可能かどうかのBoolean Listを返す（該当Entryが無ければ全てTrue）。"""
+    matched_key = next((k for k in graph_lst if k in board_prog), None)
+    if matched_key is None:
+        return [True] * len(graph_name)
+    return [name.split(':')[1] in graph_lst[matched_key] for name in graph_name]
 
 
 class MainWindow(QMainWindow):
@@ -298,9 +321,7 @@ class MainWindow(QMainWindow):
         self.data = pltutils.ReadData(self.args)    # data読込み
         self.board_prog = self.data.header.__dict__['env_set']['title']
 
-        matched_key = next((k for k in graph_lst if k in self.board_prog), None)
-        result = ([name.split(':')[1] in graph_lst[matched_key] for name in graph_name]
-                  if matched_key else [True] * len(graph_name))
+        result = resolve_graph_visibility(self.board_prog, graph_lst, graph_name)
         for name, flag in zip(graph_name, result):
             self.graph_actions[name].setVisible(flag)
 
@@ -607,15 +628,7 @@ class MainWindow(QMainWindow):
             self.label3.setToolTip(t('plot.gui.filters_tip'))
 
     def merge_filter_and_history(self):
-        merged = {}
-        all_keys = list(dict.fromkeys(list(self.filter.keys()) + list(self.history.keys())))
-        for key in all_keys:
-            merged[key] = []
-            if key in self.filter:
-                merged[key].extend(self.filter[key])  # filterが先
-            if key in self.history:
-                merged[key].extend(self.history[key])  # historyが後
-        return merged
+        return merge_filter_and_history(self.filter, self.history)
 
     def update_plot(self):
         # graphの種類に応じて描画

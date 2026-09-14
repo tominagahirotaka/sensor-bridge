@@ -206,6 +206,8 @@ class FigureQtPG:
     window.py を無変更で使えるよう、インターフェースを統一。
     """
 
+    PEAK_HISTORY_WINDOW_SEC = 2.0  # Peak検出用の履歴バッファが保持する秒数
+
     def __init__(self, board, figs, args):
         self.board = board
         self.next_loop = False
@@ -429,7 +431,7 @@ class FigureQtPG:
             for lst in self.figs]
 
         # peak検出用履歴バッファ
-        self.PEAK_HISTORY = int(2.0 / dt)  # 2秒分の点数
+        self.PEAK_HISTORY = int(self.PEAK_HISTORY_WINDOW_SEC / dt)
         debug_print(self.top_args, f'PEAK_HISTORY={self.PEAK_HISTORY}, dt={dt:.6f}')
         self._peak_history_x = [
             [[deque(maxlen=self.PEAK_HISTORY) for _ in dic['data']] for dic in lst]
@@ -469,70 +471,76 @@ class FigureQtPG:
                         y_now = plot_data[1][-1]   # ← 追加
                         y_prev = plot_data[1][-2]   # ← 追加
 
-                        # ① squares相当：現在位置より少し先のnanクリア範囲を決定
-                        erase_width = self.board.time_width / 20
-                        erase_end = (x_now + erase_width) % self.board.time_width
-
-                        # ② グリッドインデックスに変換
-                        def x_to_idx(x):
-                            return int(x / self.board.time_width * self._buf_size)
-
-                        idx_prev = x_to_idx(x_prev)
-                        idx_now = x_to_idx(x_now)
-                        idx_erase_end = x_to_idx(erase_end)
-
-                        # ③ 先読みクリア（squares の代替）
-                        if idx_erase_end > x_to_idx(x_now):
-                            self._buf_y[k][j][i][x_to_idx(x_now):idx_erase_end] = np.nan
-                        else:
-                            # wrap around
-                            self._buf_y[k][j][i][x_to_idx(x_now):] = np.nan
-                            self._buf_y[k][j][i][:idx_erase_end] = np.nan
-
-                        # ④ 新しい2点を書き込み（線形補間でグリッドへ）
-                        if idx_prev != idx_now:
-                            # 2点間を補間してグリッドに埋める
-                            x_range = self._x_grid[idx_prev:idx_now + 1]
-                            if len(x_range) > 1 and (x_now - x_prev) > 0:
-                                y_interp = np.interp(x_range, [x_prev, x_now],
-                                                     [plot_data[1][-2], plot_data[1][-1]])
-                                self._buf_y[k][j][i][idx_prev:idx_now + 1] = y_interp
-                            else:
-                                self._buf_y[k][j][i][idx_now] = plot_data[1][-1]
-
-                        # ⑤ setData（x は固定グリッド、y だけ更新）
-                        self.curves[k][j][i].setData(x=self._x_grid, y=self._buf_y[k][j][i])
+                        self._erase_and_write_buffer(k, j, i, x_prev, x_now, y_prev, y_now)
 
                         self.average[k][j][i] = (self.average[k][j][i] + y_now) / 2
 
                         if dat[-1]['peak']:
-                            # 履歴に追加
-                            self._peak_history_x[k][j][i].append(plot_data[0][-1])
-                            self._peak_history_y[k][j][i].append(y_now)
-
-                            # PEAK_HISTORY点を超えたら古いものを削除
-                            self._peak_history_x[k][j][i].append(plot_data[0][-1])
-                            self._peak_history_y[k][j][i].append(y_now)
-
-                            # PEAK_HISTORY点たまったらpeak検出
-                            if len(self._peak_history_y[k][j][i]) == self.PEAK_HISTORY:
-                                hy = np.array(self._peak_history_y[k][j][i])
-                                hx = np.array(self._peak_history_x[k][j][i])
-
-                                min_peak_distance = int(
-                                    self.board.min_peak_dist / (hx[-1] - hx[0]) * self.PEAK_HISTORY)
-                                p_idxs = utils.find_peaks(
-                                    hy, amp_thre=self.average[k][j][i], local_width=2, min_peak_distance=min_peak_distance)
-
-                                if len(p_idxs) > 0:
-                                    # 最新のpeakのみ使用（履歴の中央付近）
-                                    p_idx = p_idxs[-1]
-                                    peak_x = hx[p_idx] % self.board.time_width
-                                    peak_y = hy[p_idx]
-                                    self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
-                                    self.peak_time[k][j][i][-1] = hx[p_idx]
-                                    self.peak_interval[k][j][i] = np.average(
-                                        np.diff(self.peak_time[k][j][i]))
-                                    self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])
+                            self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
 
         return data_t.T[[0, -1]].T, self.peak_interval.transpose()[0][0]
+
+    def _erase_and_write_buffer(self, k, j, i, x_prev, x_now, y_prev, y_now):
+        """プロット(k,j,i)のyバッファについて、現在位置より少し先を
+        nanクリアしてから新しい2点を線形補間でグリッドへ書き込み、Curveに反映する。"""
+        # ① squares相当：現在位置より少し先のnanクリア範囲を決定
+        erase_width = self.board.time_width / 20
+        erase_end = (x_now + erase_width) % self.board.time_width
+
+        # ② グリッドインデックスに変換
+        def x_to_idx(x):
+            return int(x / self.board.time_width * self._buf_size)
+
+        idx_prev = x_to_idx(x_prev)
+        idx_now = x_to_idx(x_now)
+        idx_erase_end = x_to_idx(erase_end)
+
+        # ③ 先読みクリア（squares の代替）
+        if idx_erase_end > x_to_idx(x_now):
+            self._buf_y[k][j][i][x_to_idx(x_now):idx_erase_end] = np.nan
+        else:
+            # wrap around
+            self._buf_y[k][j][i][x_to_idx(x_now):] = np.nan
+            self._buf_y[k][j][i][:idx_erase_end] = np.nan
+
+        # ④ 新しい2点を書き込み（線形補間でグリッドへ）
+        if idx_prev != idx_now:
+            # 2点間を補間してグリッドに埋める
+            x_range = self._x_grid[idx_prev:idx_now + 1]
+            if len(x_range) > 1 and (x_now - x_prev) > 0:
+                y_interp = np.interp(x_range, [x_prev, x_now], [y_prev, y_now])
+                self._buf_y[k][j][i][idx_prev:idx_now + 1] = y_interp
+            else:
+                self._buf_y[k][j][i][idx_now] = y_now
+
+        # ⑤ setData（x は固定グリッド、y だけ更新）
+        self.curves[k][j][i].setData(x=self._x_grid, y=self._buf_y[k][j][i])
+
+    def _detect_and_record_peak(self, k, j, i, x_raw, y_now):
+        """プロット(k,j,i)のPeak履歴に新しい点を追加し、PEAK_HISTORY点たまったら
+        Peakを検出してpeak_time/peak_interval/散布図マーカーに反映する。"""
+        # 履歴に追加（maxlen=PEAK_HISTORYのdequeなので、超えた分は古いものから自動的に破棄される）
+        self._peak_history_x[k][j][i].append(x_raw)
+        self._peak_history_y[k][j][i].append(y_now)
+
+        # PEAK_HISTORY点たまったらpeak検出
+        if len(self._peak_history_y[k][j][i]) == self.PEAK_HISTORY:
+            hy = np.array(self._peak_history_y[k][j][i])
+            hx = np.array(self._peak_history_x[k][j][i])
+
+            min_peak_distance = int(
+                self.board.min_peak_dist / (hx[-1] - hx[0]) * self.PEAK_HISTORY)
+            p_idxs = utils.find_peaks(
+                hy, amp_thre=self.average[k][j][i], local_width=2,
+                min_peak_distance=min_peak_distance)
+
+            if len(p_idxs) > 0:
+                # 最新のpeakのみ使用（履歴の中央付近）
+                p_idx = p_idxs[-1]
+                peak_x = hx[p_idx] % self.board.time_width
+                peak_y = hy[p_idx]
+                self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
+                self.peak_time[k][j][i][-1] = hx[p_idx]
+                self.peak_interval[k][j][i] = np.average(
+                    np.diff(self.peak_time[k][j][i]))
+                self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])

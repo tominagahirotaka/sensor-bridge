@@ -21,6 +21,20 @@ from mylib.debug_utils import debug_print
 from mylib.i18n import t
 
 
+def _coerce_env_value(value_str):
+    """Parse one board env_set value: the result of evaluating it as a Python
+    expression (int/float/tuple of numbers/the board's `func` list of
+    `lambda`s/...) when it resolves without NameError, otherwise the raw
+    string, or a tuple of raw strings when comma-separated
+    (e.g. "0,1,2" -> (0, 1, 2), "SHT35" -> "SHT35", "a,b," -> ("a", "b"))."""
+    try:
+        return eval(value_str)
+    except NameError:
+        if ',' in value_str:
+            return tuple(value_str.rstrip(',').split(','))
+        return value_str
+
+
 class Header:
     def __init__(self):
         self.board = {}
@@ -190,20 +204,10 @@ class Board:
             [[('time', ''), (0, 4), 0], [('port', '0'), (4, 6), 1], [('port', '1'), (6, 8), 1],
              [('port', '2'), (8, 10), 1], [('dpm', '0'), (10, 11), 2], [('dpm', '1'), (11, 12), 2]]
         """
-        for s in [key + '=' + str(val) for key, val in self.p.env_set.items()]:
-            if 'struct' in s:
+        for key, val in self.p.env_set.items():
+            if 'struct' in (key + '=' + str(val)):
                 continue
-            try:
-                exec('self.' + s, locals(), globals())
-            except NameError:
-                if ',' in s:
-                    cmd_txt = 'self.' + s.replace('=', '=("').replace(',', '","') + '")'
-                    if s[-1] == ',':
-                        cmd_txt = cmd_txt[:-3] + ')'
-                    debug_print(self.args, f'{cmd_txt=}')
-                    exec(cmd_txt)
-                else:
-                    exec('self.' + s.replace('=', '=\"') + '\"', locals(), globals())
+            setattr(self, key, _coerce_env_value(str(val)))
         struct_tokens = utils.repeat_interpret(
             self.p.env_set['struct'],
             sep=',',
