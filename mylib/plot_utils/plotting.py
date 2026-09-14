@@ -213,7 +213,11 @@ def plot_timeinterval_histogram(win, time):
     display_data = np.clip(diff_timeinterval, lo, hi) if hi > lo else diff_timeinterval
     optimal_bins = auto_bins(display_data)  # or get_optimal_bins(display_data)
     y, x = np.histogram(display_data, bins=optimal_bins)
-    plt.plot(x, y, stepMode=True, fillLevel=0, brush=(255, 0, 0, 150))  # ヒストグラム描画(灰色背景上で目立つ赤)
+    # brushだけ赤にしてもpenを指定しないとpyqtgraphが既定の不透明な灰色(200,200,200)を
+    # 各binの境界線に使うため、bin数が多い/幅が狭いと不透明な灰色の輪郭線の方が半透明の
+    # 赤い塗りより視覚的に優勢になり、全体が灰色っぽく見えてしまう。penも赤系にして揃える。
+    plt.plot(x, y, stepMode=True, fillLevel=0,
+              pen=(150, 0, 0), brush=(255, 0, 0, 150))                  # ヒストグラム描画(灰色背景上で目立つ赤)
     plt.setLabels(left='Count', bottom=('Time Interval', 's'))         # 軸ラベル設定
     plt.showGrid(x=True, y=True)                                       # グリッド表示
     return plt
