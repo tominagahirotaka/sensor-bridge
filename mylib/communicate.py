@@ -14,6 +14,16 @@ import time
 import numpy as np
 import serial.tools.list_ports
 
+try:
+    # termiosはPOSIX専用。切断済みシリアルデバイスに対する
+    # ser.reset_output_buffer()等がserial.SerialExceptionではなく
+    # termios.error(Exceptionのサブクラスで、OSErrorではない)を投げることがあるため、
+    # 個別に捕捉できるよう用意する。Windowsではモジュール自体が存在しないため空にする。
+    import termios
+    _TERMIOS_ERRORS = (termios.error,)
+except ImportError:
+    _TERMIOS_ERRORS = ()
+
 import mylib.fileIO as FIO
 import mylib.i18n as i18n
 import mylib.utils as utils
@@ -312,7 +322,10 @@ class Board:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
             self.ser.write(b"r")
-        except serial.SerialException:
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            # デバイスが物理的に切断済みだと、reset_output_buffer()内のtermios.tcflush()が
+            # serial.SerialExceptionでもOSErrorでもないtermios.error(Exception直下)を
+            # 投げてくることがあり、それを取り逃すとThreadが未捕捉例外でクラッシュしてしまう。
             pass
         print(t('comm.thread_no_write_stopped'))
 
@@ -331,7 +344,10 @@ class Board:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
             self.ser.write(b"r")
-        except serial.SerialException:
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            # デバイスが物理的に切断済みだと、reset_output_buffer()内のtermios.tcflush()が
+            # serial.SerialExceptionでもOSErrorでもないtermios.error(Exception直下)を
+            # 投げてくることがあり、それを取り逃すとThreadが未捕捉例外でクラッシュしてしまう。
             pass
         print(t('comm.thread_write_stopped'))
 
