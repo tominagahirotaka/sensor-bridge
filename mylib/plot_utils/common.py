@@ -179,14 +179,17 @@ def mouseMoved(evt, plots, vLine, hLine, xy):
 
 def mouseMovedImage(evt, plots, vLine, hLine, xyz):
     pos = evt
-    time = xyz.data[0][0]
-    image_data = xyz.data[-1]   # 2]
     xlab, xunit = next(iter(xyz.xlabel.values()))
-    ylab, yunit = next(iter(xyz.labels[0].values()))
-    for p in plots.plts:
+    # plot_scalogram()はzip(plots.plts, xyz.data, xyz.labels)でPanel毎にImageを作るため、
+    # plots.plts[k]はxyz.data[k]/xyz.labels[k]と対応する。以前はk(=0)を決め打ちしており、
+    # どのPanelをホバーしてもチャンネル0のLabelしか表示されなかった。
+    for k, p in enumerate(plots.plts):
         if p.sceneBoundingRect().contains(pos):
             mouse_point = p.vb.mapSceneToView(pos)
             x, y = mouse_point.x(), mouse_point.y()
+            image_data = xyz.data[k]
+            time = image_data[0]
+            ylab, yunit = next(iter(xyz.labels[k].values()))
             # 画像の値を取得（境界チェック付き）
             if 0 <= x < time[-1] and 0 <= y < image_data[0].shape[0]:
                 label_text = make_title_span(plots.title)
