@@ -170,6 +170,7 @@ def find_peaks(a, amp_thre, local_width=1, min_peak_distance=1):
 
 
 def average_heart_rate(bloodP):
-    """Average of the numeric heart-rate readings in the subject dialog's blood-pressure rows."""
+    """Average of the numeric heart-rate readings in the subject dialog's blood-pressure rows.
+    Returns None when no row has a numeric reading (e.g. the field was left blank)."""
     vals = [int(val[3]) for val in bloodP if val[3].isdigit()]
-    return np.average(vals)
+    return np.average(vals) if vals else None
