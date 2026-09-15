@@ -8,11 +8,11 @@ char program_name[] = "Analog";
 
 uint32_t baud = 115200; //  9600; 19200; 38400; 57600;
 uint32_t time0micros, time0millis, one_data_byte, time_interval, real_time_interval, serial_time_interval, waiting_time0;    // 4byte
-usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t 
+usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t
 int ok=0;
 //
 std::map<string, string> params_from;  //  parameters from PC
-std::map<string, string> params_to;    //  parameters to PC 
+std::map<string, string> params_to;    //  parameters to PC
 vector<int> indx;
 uint8_t  numCh, num_avg, time_unit;
 uint16_t signal_max;
@@ -40,25 +40,25 @@ void initialSetupParam(char ch, string str){
     t0 = (time_unit == 6)?micros():millis();
     for (auto i=0; i<32; i++) { analog_read(indx, usig.sig, numCh, num_avg); bin_write(time_dummy, u8t_dummy, 2*numCh);}
     t1 = (time_unit == 6)?micros():millis();
-    Serial.println(""); //Serial.flush();  delay(10); 
+    Serial.println(""); //Serial.flush();  delay(10);
     params_to["unit_time"] = to_string((t1-t0)/32);   //params_to["unit_time0"] = to_string(t0);  params_to["unit_time1"] = to_string(t1);
   //
   // Make parameters
-  params_to["endian"]    = "little";   
+  params_to["endian"]    = "little";
   params_to["struct"]    = "time(u4:func0), [(" + params_from["port_num"] + ")]port(u2:func1)"; // data structure
   float divisor = std::pow(10.0, float(time_unit));
   float coeff   = volt / signal_max;
-  params_to["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"  
-                    + "  (lambda x:x*"   + to_string(coeff)     + "," + to_string(ADCres) + ", \'V\')]";          
-  //    
+  params_to["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"
+                    + "  (lambda x:x*"   + to_string(coeff)     + "," + to_string(ADCres) + ", \'V\')]";
+  //
   // -> PC (Write parameters to PC)
   //
   string str_params = join_dict(params_to, ";", "=") + ";" + join_dict(params_from, ";", "=");
-  serial_print_separate(str_params); //Serial.flush();  delay(10); 
+  serial_print_separate(str_params); //Serial.flush();  delay(10);
 }
 
 void changeParam(char ch){
-  params_to["struct"] = "time(u4:func0), [(" + params_from["port_num"] + ")]port(u2:func1)"; 
+  params_to["struct"] = "time(u4:func0), [(" + params_from["port_num"] + ")]port(u2:func1)";
   one_data_byte       = 4 + indx.size()*2;
   //
   // Time intervals (serial...USB transfer limit, real...real transfer interval)
@@ -70,7 +70,7 @@ void changeParam(char ch){
   params_to["real_time_interval"]    = to_string(real_time_interval);
   //
   // -> PC (Write parameters to PC)
-  serial_print_separate(join_dict(params_to, ";", "=")); //Serial.flush();  delay(10); 
+  serial_print_separate(join_dict(params_to, ";", "=")); //Serial.flush();  delay(10);
 }
 
 void setup() {
@@ -85,19 +85,19 @@ void loop() {
     switch (ch) {
       case 'i': // Initialize
       case 'a': // Initialize Again
-        ok = 0; input = (Serial.readStringUntil('\n')).c_str(); initialSetupParam(ch, input); 
+        ok = 0; input = (Serial.readStringUntil('\n')).c_str(); initialSetupParam(ch, input);
         delay(100);        // <- VERY IMPORTANT https://garchiving.com/high-speed-processing-of-serial-communication-in-arduino/
-        break;     
+        break;
       case 's':
       case ';':  // Start
-        ok = 1; 
-        changeParam(ch); 
+        ok = 1;
+        changeParam(ch);
         delay(100);
         Serial.println("OK");   // written out as a Start marker
         waiting_time0 = micros();
         break;
       case 'r':  // stop(reset) -> 'r'
-        ok = 0; break; 
+        ok = 0; break;
       case 'q':  // quit  -> 'q'
         ok = 0; software_reset(); break;
       default:

@@ -11,13 +11,13 @@ void exact_waiting(uint32_t t0_plus_thre) { uint32_t t1 = micros(); while (t1 < 
 //
 void begin_serial(uint32_t baud, uint16_t delay_time, char st[]) {
   char strbuf[64];
-  Serial.begin(baud); while(!Serial){;} delay(delay_time); 
+  Serial.begin(baud); while(!Serial){;} delay(delay_time);
   sprintf(strbuf, ":%s:@@", st); Serial.println(strbuf);
 }
 //
 // i2c
 //
-void i2c_begin(TwoWire& wire, uint8_t SDA) 
+void i2c_begin(TwoWire& wire, uint8_t SDA)
 { wire.setSDA(SDA); wire.setSCL(SDA + 1); wire.begin(); }
 void i2c_read(TwoWire wire, uint8_t Addr, uint8_t dat[], uint8_t num)
 { wire.requestFrom(Addr, (uint8_t)num);          //while (wire.available() != num);
@@ -52,17 +52,17 @@ void analog_read(vector<int>& indx, uint16_t *sig, uint8_t ch, uint8_t avg) {
 }
 //
 //
-void bin_write(uint32_t tm, uint8_t *b_sig, uint16_t len) 
+void bin_write(uint32_t tm, uint8_t *b_sig, uint16_t len)
 { utime utm = { tm }; Serial.write(utm.binary, 4); Serial.write(b_sig, len); }
 //
 // MCP4018 digital potentiometer
 //
-void i2c_2lines_begin(vector<int> i2c_pinno){i2c_begin(Wire,i2c_pinno[0]); i2c_begin(Wire1,i2c_pinno[1]);} // Wireの初期化(Pin設定) 
+void i2c_2lines_begin(vector<int> i2c_pinno){i2c_begin(Wire,i2c_pinno[0]); i2c_begin(Wire1,i2c_pinno[1]);} // Wireの初期化(Pin設定)
 void MCP4018_read(vector<int> i2c_addr, vector<uint8_t>& dpm)
-{ uint8_t d0[2], d1[2]; i2c_read(Wire, i2c_addr[0], d0, 1); i2c_read(Wire1, i2c_addr[0], d1, 1); 
-  dpm[0] = d0[0]; dpm[1] = d1[0];}  
-void MCP4018_write(vector<int> i2c_addr, vector<uint8_t>& dpm) 
-{i2c_write1(Wire, i2c_addr[0], dpm[0]); i2c_write1(Wire1,i2c_addr[0], dpm[1]); } 
+{ uint8_t d0[2], d1[2]; i2c_read(Wire, i2c_addr[0], d0, 1); i2c_read(Wire1, i2c_addr[0], d1, 1);
+  dpm[0] = d0[0]; dpm[1] = d1[0];}
+void MCP4018_write(vector<int> i2c_addr, vector<uint8_t>& dpm)
+{i2c_write1(Wire, i2c_addr[0], dpm[0]); i2c_write1(Wire1,i2c_addr[0], dpm[1]); }
 //
 int get_int(std::map<string, string>& mp, string key, int def_val)
 { return (mp.count(key))? std::stoi(mp[key]) : def_val; }
@@ -70,14 +70,14 @@ int get_int(std::map<string, string>& mp, string key, int def_val)
 float get_float(std::map<string, string>& mp, string key, float def_val)
 { return (mp.count(key))? std::stof(mp[key]) : def_val; }
 
-vector<int> get_int_list(std::map<string, string>& mp, string key, string def_val) { 
+vector<int> get_int_list(std::map<string, string>& mp, string key, string def_val) {
   vector<int> tmp;
   vector<string> v = split((mp.count(key))? mp[key] : def_val, ",", 1, 0);
   for (auto itr = v.begin(); itr != v.end(); ++itr) tmp.push_back(std::stoi(*itr, nullptr, 0));
   return tmp;
 }
 
-vector<float> get_float_list(std::map<string, string>& mp, string key, string def_val) { 
+vector<float> get_float_list(std::map<string, string>& mp, string key, string def_val) {
   vector<float> tmp;
   vector<string> v = split((mp.count(key))? mp[key] : def_val, ",", 1, 0);
   for (auto itr = v.begin(); itr != v.end(); ++itr) tmp.push_back(std::stof(*itr)); //, nullptr, 0.0));
@@ -94,12 +94,12 @@ vector<string> split(const string& s, const string& separator, bool ignore_empty
     auto len(const std::string::value_type* p) { return p ? std::char_traits<std::string::value_type>::length(p) : 0; }
     auto len(const std::string::value_type  c) { return c == std::string::value_type() ? 0 : 1; /*return 1;*/ }
   } util;
-  
+
   if (s.empty()) { /// empty string ///
     if (!split_empty || util.len(separator)) return {""};
     return {};
   }
-  
+
   auto v = std::vector<std::string>();
   auto n = static_cast<std::string::size_type>(util.len(separator));
   if (n == 0) {    /// empty separator ///
@@ -107,7 +107,7 @@ vector<string> split(const string& s, const string& separator, bool ignore_empty
     for (auto&& c : s) v.emplace_back(1, c);
     return v;
   }
-  
+
   auto p = std::string::size_type(0);
   while (1) {      /// split with separator ///
     auto pos = s.find(separator, p);
@@ -123,13 +123,13 @@ vector<string> split(const string& s, const string& separator, bool ignore_empty
   return v;
 }
 
-std::map<string, string> split_dict(const string& s, const string& sep1, const string& sep2) { 
+std::map<string, string> split_dict(const string& s, const string& sep1, const string& sep2) {
   std::map<string,string> dict;
   //Serial.print(s.size());
   //Serial.println(s.c_str());
   if (!s.size()) return dict;
   vector<string> v = split(s, sep1, 1, 0);
-  
+
   for (auto itr = v.begin(); itr != v.end(); ++itr) {
     std::vector<std::string> tmp = split((*itr), sep2, 0 ,0);
     dict[tmp[0]] = tmp[1];
@@ -161,7 +161,7 @@ string join_dict(const std::map<string, string>& mp, const string& delim1, const
   return join(v, delim1);
 }
 //
-// Because Serial_Buffer_Size = 64 
+// Because Serial_Buffer_Size = 64
 //
 void serial_print_separate(const string& s) {
   uint8_t len = 56;
@@ -177,7 +177,7 @@ void serial_print_separate(const string& s) {
 //
 unsigned char table[256] = {
   0, 94, 188, 226, 97, 63, 221, 131, 194, 156, 126, 32, 163, 253, 31, 65, 157, 195, 33,
-  127, 252, 162, 64, 30, 95, 1, 227, 189, 62, 96, 130, 220, 35, 125, 159, 193, 66, 28, 
+  127, 252, 162, 64, 30, 95, 1, 227, 189, 62, 96, 130, 220, 35, 125, 159, 193, 66, 28,
   254, 160, 225, 191, 93, 3, 128, 222, 60, 98, 190, 224, 2, 92, 223, 129, 99, 61, 124,
   34, 192, 158, 29, 67, 161, 255, 70, 24, 250, 164, 39, 121, 155, 197, 132, 218, 56,
   102, 229, 187, 89, 7, 219, 133, 103, 57, 186, 228, 6, 88, 25, 71, 165, 251, 120, 38,
@@ -190,13 +190,13 @@ unsigned char table[256] = {
   87, 9, 235, 181, 54, 104, 138, 212, 149, 203, 41, 119, 244, 170, 72, 22, 233, 183, 85,
   11, 136, 214, 52, 106, 43, 117, 151, 201, 74, 20, 246, 168, 116, 42, 200, 150, 21, 75,
   169, 247, 182, 232, 10, 84, 215, 137, 107, 53};
-unsigned char crc8(const unsigned char * data) { 
-    unsigned char crc = 0xff; 
-    crc = table[reflect(data[0]) ^ crc]; crc = table[reflect(data[1]) ^ crc]; 
+unsigned char crc8(const unsigned char * data) {
+    unsigned char crc = 0xff;
+    crc = table[reflect(data[0]) ^ crc]; crc = table[reflect(data[1]) ^ crc];
     return reflect(crc);
 }
-unsigned char reflect(unsigned char c) { 
-  unsigned char r = 0; 
-  for (int i = 0; i < 8; i++) { if (c & (1 << i)) { r = r | (1 << (7 - i)); }} 
+unsigned char reflect(unsigned char c) {
+  unsigned char r = 0;
+  for (int i = 0; i < 8; i++) { if (c & (1 << i)) { r = r | (1 << (7 - i)); }}
   return r;
 }

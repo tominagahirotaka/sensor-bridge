@@ -12,7 +12,7 @@ char strbuf[512];
 
 uint32_t baud = 115200; //  9600; 19200; 38400; 57600;
 uint32_t time0micros, time0millis, one_data_byte, real_time_interval, serial_time_interval, waiting_time0;    // 4byte
-usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t 
+usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t
 uint16_t stop_cmd = 0x3093;
 int ok=0;
 
@@ -21,7 +21,7 @@ std::map<string, string> params_from;  //  parameters from PC
 std::map<string, string> params_to = { //  parameters to PC
     {"data_names", "temperature,humidity"}
 };
-vector<int> i2c_addr, i2c_pinno, mode_list, sleep_time; 
+vector<int> i2c_addr, i2c_pinno, mode_list, sleep_time;
 vector<string> data_names, sensor_id;
 uint8_t sensors=0; //0b1010;sensor connection i2cWire(0|1), addr(A|B) 4pattern=(0B,0A,1B,1A)-> 0000--1111;0A,1A=>0101;0B,1B=>1010
 uint8_t time_unit, modeno;
@@ -40,15 +40,15 @@ void initialSetupParam(char ch, string str){
   mode_list   = get_int_list(params_from, "mode_list",  "0x2334, 0x2737"); // 4, 100
   sleep_time  = get_int_list(params_from, "sleep_time", "250,100");        // msec
   if (ch == 'i') i2c_2lines_begin(i2c_pinno);
-  else if (ch == 'a') 
-        for (uint8_t i=0; i<i2c_addr.size(); ++i) 
+  else if (ch == 'a')
+        for (uint8_t i=0; i<i2c_addr.size(); ++i)
         {i2c_write2(Wire, i2c_addr[i], stop_cmd); i2c_write2(Wire1, i2c_addr[i], stop_cmd); delay(20); sensors = 0;}
   // Send mode-setting cmd to device, check existence
   for (uint8_t i=0; i<i2c_addr.size(); ++i) {
     char s[32];
-    if (!i2c_write2(Wire,  i2c_addr[i], mode_list[modeno])) 
+    if (!i2c_write2(Wire,  i2c_addr[i], mode_list[modeno]))
     { sensors += (i + 1)*4; snprintf(s, 32, "wire%d_0x%X", 0, i2c_addr[i]); sensor_id.push_back(s);}
-    if (!i2c_write2(Wire1, i2c_addr[i], mode_list[modeno])) 
+    if (!i2c_write2(Wire1, i2c_addr[i], mode_list[modeno]))
     { sensors += i + 1;     snprintf(s, 32, "wire%d_0x%X", 1, i2c_addr[i]); sensor_id.push_back(s);}
   }
   // SHT35 data structure
@@ -56,18 +56,18 @@ void initialSetupParam(char ch, string str){
   //
   // Make parameters
   //
-  params_to["endian"] = "little"; 
-  params_to["sensor_id"] = join(sensor_id, ",");  
+  params_to["endian"] = "little";
+  params_to["sensor_id"] = join(sensor_id, ",");
   params_to["struct"] = "time(u4:func0), [(" + params_to["sensor_id"] +")]{temp(u2:func1),humid(u2:func2)}";
   if (sensor_id.size() == 1) params_to["sensor_id"] += ',';
   one_data_byte       = 4 + sensor_id.size()*2*2;    // Look at the line above and calculate
   float divisor = std::pow(10.0, float(time_unit));
   //                   [ (lambda,                                     bit(max value),       'unit')]
-  params_to["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"  
-                    + "  (lambda x:-45+x*175.0/65535.0," + to_string(16) + ", \'℃\'),"         
-                    + "  (lambda x:100.0*x/65535.0,"     + to_string(16) + ", \'%\')  ]";    
+  params_to["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"
+                    + "  (lambda x:-45+x*175.0/65535.0," + to_string(16) + ", \'℃\'),"
+                    + "  (lambda x:100.0*x/65535.0,"     + to_string(16) + ", \'%\')  ]";
 
-  //    
+  //
   // -> PC (Write parameters to PC)
   //
   string str_params = join_dict(params_to, ";", "=") + ";" + join_dict(params_from, ";", "=");
@@ -86,7 +86,7 @@ void changeParam(char ch){
   params_to["real_time_interval"]    = to_string(real_time_interval);
   //
   // -> PC (Write parameters to PC)
-  serial_print_separate(join_dict(params_to, ";", "=")); //Serial.flush();  delay(10); 
+  serial_print_separate(join_dict(params_to, ";", "=")); //Serial.flush();  delay(10);
 }
 
 #ifdef DEBUG
@@ -94,13 +94,13 @@ void write_plotting_data(uint16_t num_data) {
   float temp, RH;
   for (uint8_t i=0; i<num_data; i++) {
     temp = -45 + usig.sig[2*i] * 175.0/65535.0; RH = 100.0 * usig.sig[2*i+1]/65535.0;
-    Serial.print(temp); Serial.print(", "); Serial.print(RH);Serial.print(", "); 
+    Serial.print(temp); Serial.print(", "); Serial.print(RH);Serial.print(", ");
   } Serial.println(); }
 #endif
 bool sensor_read(uint16_t *sig) {
   vector<uint16_t> tmp(data_names.size());
   for (uint8_t i=0,cnt=0; i<i2c_addr.size(); ++i) {
-    if (sensors & ((i + 1)*4) ) { 
+    if (sensors & ((i + 1)*4) ) {
       if (i2c_read_crc8(Wire,  i2c_addr[i], tmp, data_names.size())) {
         for (uint8_t j=0; j<tmp.size(); ++j) sig[cnt+j] = tmp[j];
         cnt+=tmp.size();
@@ -108,7 +108,7 @@ bool sensor_read(uint16_t *sig) {
     }
     if (sensors & (i + 1)) {
       if (i2c_read_crc8(Wire1, i2c_addr[i], tmp, data_names.size())) {
-        for (uint8_t j=0; j<tmp.size(); ++j) sig[cnt+j] = tmp[j]; 
+        for (uint8_t j=0; j<tmp.size(); ++j) sig[cnt+j] = tmp[j];
         cnt+=tmp.size();
       } else { return false; }
     }
@@ -120,32 +120,32 @@ void setup() {ok = 0; begin_serial(baud, 100, program_name); }
 
 void loop() {
   string input;
-  char ch; 
+  char ch;
   if (Serial.available() > 0) {
     delay(100);
     ch = Serial.read();// Serial.print("ch=");Serial.println(ch);
     switch (ch) {
       case 'i': // Initialize
       case 'a': // Initialize Again
-        ok = 0; 
+        ok = 0;
 #ifdef DEBUG
         input = "time_unit=6;i2c_addr=0x44,0x45;modeno=1;mode_list=0x2334, 0x2737;sleep_time=250,100";
-#else        
+#else
         input = (Serial.readStringUntil('\n')).c_str(); //Serial.flush();
 #endif
-        initialSetupParam(ch, input); 
+        initialSetupParam(ch, input);
         delay(100);        // <- VERY IMPORTANT https://garchiving.com/high-speed-processing-of-serial-communication-in-arduino/
-        break; 
+        break;
       case 's':  // start
-      case ';': 
+      case ';':
         ok = 1;
         changeParam(ch);
         delay(100);
         Serial.println("OK");   // written out as a Start marker
-        waiting_time0 = micros(); 
+        waiting_time0 = micros();
         break;
       case 'r':  // stop(reset) -> 'r'
-        ok = 0; break; 
+        ok = 0; break;
       case 'q':  // quit  -> 'q'
         ok = 0; software_reset(); break;
       default:
@@ -156,8 +156,8 @@ void loop() {
   switch (ok) {
     case 0: break;
     case 1:
-      exact_waiting(waiting_time0 + real_time_interval); 
-      waiting_time0 = micros(); 
+      exact_waiting(waiting_time0 + real_time_interval);
+      waiting_time0 = micros();
       while (!sensor_read(usig.sig));
 #ifdef DEBUG
       write_plotting_data(sensor_id.size());

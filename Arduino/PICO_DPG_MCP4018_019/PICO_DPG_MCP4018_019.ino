@@ -8,7 +8,7 @@ char program_name[] = "DPG_MCP4018";
 
 uint32_t baud = 115200; //  9600; 19200; 38400; 57600;
 uint32_t time0micros, time0millis, one_data_byte, real_time_interval, serial_time_interval, waiting_time0;    // 4byte
-usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t 
+usignal usig;  // Union member sig[] is uint16_t & member binary[] is uint8_t
 int ok=0;
 //
 std::map<string, string> params;  //  parameters between this board and PC
@@ -47,7 +47,7 @@ void initialSetupParam(char ch, string str){
   analogReadResolution(ADCres);
   signal_max = std::pow(2.0, (float)ADCres)-1;
   numCh      = indx.size();
-  for (uint16_t i=0; i<amp_max.size(); i++) {  
+  for (uint16_t i=0; i<amp_max.size(); i++) {
     range_max[i] = (amp_max[i] + tuning_width[i]/2)*signal_max/100.0;
     range_min[i] = (amp_max[i] - tuning_width[i]/2)*signal_max/100.0;
   }
@@ -57,36 +57,36 @@ void initialSetupParam(char ch, string str){
     t0 = (time_unit == 6)?micros():millis();
     for (auto i=0; i<32; i++) { analog_read(indx, usig.sig, numCh, num_avg); bin_write(time_dummy, u8t_dummy, 2*numCh);}
     t1 = (time_unit == 6)?micros():millis();
-    Serial.println(""); //Serial.flush();  delay(10); 
+    Serial.println(""); //Serial.flush();  delay(10);
     params["unit_time"] = to_string((t1-t0)/32);   //params["unit_time0"] = to_string(t0);  params["unit_time1"] = to_string(t1);
   //
   // Make parameters
   //
-  params["endian"]    = "little"; 
-  
-  if (ch == 'i') i2c_2lines_begin(i2c_pinno);  
+  params["endian"]    = "little";
+
+  if (ch == 'i') i2c_2lines_begin(i2c_pinno);
   MCP4018_read(i2c_addr, dpm);
   params["dpm"]       = to_string(dpm[0]) + "," + to_string(dpm[1]);                // Digital potentio meter
   // params["dpm_size"]  = to_string(dpm.size());
-  
+
   params["struct"]    = "time(u4:func0), [(" + params["port_num"] + ")]port(u2:func1)"; // data structure
   float divisor = std::pow(10.0, float(time_unit));
   float coeff   = volt / signal_max;
   float dpm_coeff = 10.0 / (std::pow(2.0, 7.0)-1);
   //                   [ (lambda,                                     bit(max value),       'unit')]
-  params["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"  
-                    + "  (lambda x:x*"   + to_string(coeff)     + "," + to_string(ADCres) + ", \'V\'),"         
-                    + "  (lambda x:x*"   + to_string(dpm_coeff) + "," + to_string(7)      + ", \'kOhm\')  ]";           
-  //    
+  params["func"] = "[ (lambda tm:tm/" + to_string(divisor)   + "," + to_string(4*8)    + ", \'sec\'),"
+                    + "  (lambda x:x*"   + to_string(coeff)     + "," + to_string(ADCres) + ", \'V\'),"
+                    + "  (lambda x:x*"   + to_string(dpm_coeff) + "," + to_string(7)      + ", \'kOhm\')  ]";
+  //
   // -> PC (Write parameters to PC)
   //
   string str_params = join_dict(params, ";", "="); // + ";" + join_dict(params, ";", "=");
-  serial_print_separate(str_params); //Serial.flush();  delay(10); 
+  serial_print_separate(str_params); //Serial.flush();  delay(10);
 }
 
 void changeParam(char ch){
   params["dpm"]       = to_string(dpm[0]) + "," + to_string(dpm[1]);                // Digital potentio meter
-  params["struct"] = "time(u4:func0), [(" + params["port_num"] + ")]port(u2:func1)"; 
+  params["struct"] = "time(u4:func0), [(" + params["port_num"] + ")]port(u2:func1)";
   one_data_byte       = 4 + indx.size()*2;
   if (ch == 'c') { params["struct"] += ", [2]dpm(u1:func2)"; one_data_byte += 2*1; }
   //
@@ -99,9 +99,9 @@ void changeParam(char ch){
   params["real_time_interval"]    = to_string(real_time_interval);
   //
   // -> PC (Write parameters to PC)
-  serial_print_separate(join_dict(params, ";", "=")); //Serial.flush();  delay(10); 
+  serial_print_separate(join_dict(params, ";", "=")); //Serial.flush();  delay(10);
 }
-  
+
 void calibrating(uint32_t tm) {
   uint32_t t0, t1;
   uint16_t sigmax[3],sigmin[3];
@@ -110,14 +110,14 @@ void calibrating(uint32_t tm) {
   for (uint8_t i=0; i<dpm.size(); i++) { sigmax[i] = 0; sigmin[i] = UINT16_MAX; }
   while ((t1 - t0) < calib_interval) {
     if (Serial.available() > 0) { Serial.flush(); return; }
-    
+
     exact_waiting(waiting_time0 + real_time_interval); // Wait Until (now_time - waiting_time0 > real_time_interval)
     waiting_time0 = micros();
-    
+
     analog_read(indx, usig.sig, numCh, num_avg);
-    for (uint8_t i=0; i<dpm.size(); i++) { 
-      usig.binary[numCh*2 + i] = dpm[i]; 
-      if (sigmax[i] < usig.sig[i]) sigmax[i] = usig.sig[i]; 
+    for (uint8_t i=0; i<dpm.size(); i++) {
+      usig.binary[numCh*2 + i] = dpm[i];
+      if (sigmax[i] < usig.sig[i]) sigmax[i] = usig.sig[i];
       if (sigmin[i] > usig.sig[i]) sigmin[i] = usig.sig[i];
       range[i]  = sigmax[i] - sigmin[i];
     }
@@ -125,7 +125,7 @@ void calibrating(uint32_t tm) {
     bin_write(t1-tm, usig.binary, 2*numCh + dpm.size());
     t1 = (time_unit == 6)?micros():millis();
   }
-  tuning(range, range_max, range_min, dpm); 
+  tuning(range, range_max, range_min, dpm);
   MCP4018_write(i2c_addr, dpm);    // <- Don't Move out from this function
   delay(calib_waiting);            // <- Don't Move out from this function
 }
@@ -142,26 +142,26 @@ void loop() {
     switch (ch) {
       case 'i': // Initialize
       case 'a': // Initialize Again
-        ok = 0; input = (Serial.readStringUntil('\n')).c_str(); initialSetupParam(ch, input); 
+        ok = 0; input = (Serial.readStringUntil('\n')).c_str(); initialSetupParam(ch, input);
         delay(100);        // <- VERY IMPORTANT https://garchiving.com/high-speed-processing-of-serial-communication-in-arduino/
         break;
       case 's':
       case ';':  // Start
-        ok = 1; 
-        changeParam(ch); 
+        ok = 1;
+        changeParam(ch);
         delay(100);
         Serial.println("OK");   // written out as a Start marker
         waiting_time0 = micros();
         break;
       case 'c': // Calibration
-        ok = 2; 
-        changeParam(ch); 
+        ok = 2;
+        changeParam(ch);
         delay(100);
         Serial.println("OK");   // written out as a Start marker
         waiting_time0 = micros();
         break;
       case 'r':  // stop(reset) -> 'r'
-        ok = 0; break; 
+        ok = 0; break;
       case 'q':  // quit  -> 'q'
         ok = 0; software_reset(); break;
       default:

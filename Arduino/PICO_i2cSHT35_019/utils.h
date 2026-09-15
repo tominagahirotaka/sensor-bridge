@@ -6,10 +6,10 @@
 //
 #include <map>
 #include <string>
-#include <vector> 
+#include <vector>
 #include "Arduino.h"
 #include <Wire.h>
-using namespace std; 
+using namespace std;
 typedef union { uint32_t time;    uint8_t binary[4];  } utime;
 typedef union { uint16_t sig[16]; uint8_t binary[32]; } usignal;
 
@@ -19,7 +19,7 @@ void exact_waiting(uint32_t);
 //
 void begin_serial(uint32_t, uint16_t, char st[]);
 //
-void i2c_begin(TwoWire&, uint8_t); 
+void i2c_begin(TwoWire&, uint8_t);
 void i2c_read(TwoWire, uint8_t, uint8_t dat[], uint8_t);
 int i2c_write1(TwoWire, uint8_t, uint8_t);
 int i2c_write2(TwoWire, uint8_t, uint16_t);
@@ -40,7 +40,7 @@ vector<int> get_int_list(std::map<string, string>&, string, string);
 vector<float> get_float_list(std::map<string, string>&, string, string);
 //
 vector<string> split(const string&, const string&, bool, bool);
-std::map<string, string> split_dict(const string&, const string&, const string&); 
+std::map<string, string> split_dict(const string&, const string&, const string&);
 
 string join(const vector<string>&, const string&);
 string join_dict(const std::map<string, string>&, const string&, const string&);
