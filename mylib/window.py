@@ -64,20 +64,20 @@ class ApplicationWindow(QMainWindow):
         ]))
         self.setCentralWidget(main_canvas)                               # set QMainWindow
 
-        # ウィンドウサイズをスクリーンに合わせて設定 ← ここで行う
+        # Size the window to fit the screen -- done here
         from PyQt5.QtWidgets import QApplication
         screen = QApplication.primaryScreen()
         if screen is not None:
             sg = screen.availableGeometry()
             w = int(sg.width() * 0.75)
             h = int(sg.height() * 0.75)
-            self.resize(w, h)                          # ApplicationWindow自体をresize
-        # 画面中央に配置
+            self.resize(w, h)                          # resize the ApplicationWindow itself
+        # Center it on screen
             self.move(sg.x() + (sg.width() - w) // 2,
                       sg.y() + (sg.height() - h) // 2)
             debug_print(self.args, f'screen={sg.width()}x{sg.height()}, win={w}x{h}')
 
-        # QTimer setting(一定時間ごとの図の更新を可能にする)
+        # QTimer setting (allows the figure to be redrawn at a fixed interval)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update)
         self.timer.setInterval(0)
@@ -96,28 +96,30 @@ class ApplicationWindow(QMainWindow):
         first_last_data, peak_interval = self.figure.update(self.rcv.stream)
         exec(self.code['lcd_update'], globals(), locals())
 
-    # Plot開始(Qt)
+    # Start plotting (Qt)
     def start_animation(self):
         self.timer.start()
 
-    # reset(Qt)
+    # reset (Qt)
     def reset(self):
         self.rcv.stop_running()              # Send 'r' (reset)i.e. Stop to Board
         self.board.loop_th = False
         if self.rcv.init_flag:
             self.timer.stop()
-        # th.join()自体が「読み取りThreadが実際に止まるまで」正しく待つので、
-        # 固定2秒sleepは不要な遅延だった(Stop/Quitのたびに最低2秒余分にかかっていた)。
+        # th.join() itself correctly waits until the read thread has actually
+        # stopped, so the fixed 2-second sleep here used to be unnecessary
+        # extra delay (adding at least 2 extra seconds to every Stop/Quit).
         if hasattr(self.rcv, 'th'):
             self.rcv.th.join()
             print(t('window.reset_stop_thread'))
-        # file closing ... threadを止めてから実行すること
-        # start_running()がconnect_serial()等で例外を出して失敗すると、write_flag=True
-        # のままself.rcv.fileが一度も作られない(start_read_thread()まで到達しない)状態に
-        # なり得る。hasattrで防御しないと、その後のStop/Quitがここで再度クラッシュする。
+        # File closing ... must run after the thread has been stopped.
+        # If start_running() raises (e.g. from connect_serial()) and fails,
+        # write_flag can end up True while self.rcv.file was never created
+        # (start_read_thread() was never reached). Without the hasattr guard,
+        # the next Stop/Quit would crash here again.
         if self.rcv.write_flag and hasattr(self.rcv, 'file'):
             self.rcv.file.fwrite.close()
-        # check pointsファイルopen&write&close
+        # Open, write, and close the checkpoint file
         if self.rcv.write_flag and hasattr(self.rcv, 'file') and self.rcv.init_flag and len(
                 self.rcv.p.time['check_points']) != 0:
             print(t('window.exec_write_close_cpt'))
@@ -217,7 +219,7 @@ class ApplicationWindow(QMainWindow):
         self.quit(t('window.close_pressed'))
 
     def quit(self, msg):
-        self.board.ser.write(b"q")  # quit... 必ず self.reset()の前に実行
+        self.board.ser.write(b"q")  # quit... must run before self.reset()
         self.reset()
         print(t('window.quit_log', msg=msg))
         self.board.ser.close()

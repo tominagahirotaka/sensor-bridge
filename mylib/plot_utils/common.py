@@ -58,14 +58,14 @@ colorbrewer_set1 = [
 # COLORS = ['black', 'red', 'blue', 'magenta', 'green', 'indigo', 'cyan', 'maroon']
 COLORS = colorbrewer_set1  # cud_colors #tableau10
 
-# 背景色を定義
+# Define background colors
 bg_colors = {
     "BN": "#FFC8C8",
     "DS": "#C8FFC8",
     "MA": "#C8C8FF",
     "LP": "#FFFFC8",
     "BP": "#CFCFC8",
-    "TR": "#CFCFC8"}  # 薄い赤, 薄い緑, 薄い青, 薄い黄
+    "TR": "#CFCFC8"}  # light red, light green, light blue, light yellow
 symbol_colors = ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#D55E00', '#CC79A7']
 
 
@@ -87,7 +87,7 @@ style_dict = {
 os_name = platform.system()
 sns.set(font=font_family_name[os_name])
 
-# ViewBoxをオーバーライドして描画時間を計測
+# Override ViewBox to measure paint time
 
 
 class TimedViewBox(pg.ViewBox):
@@ -97,7 +97,7 @@ class TimedViewBox(pg.ViewBox):
         t1 = time.perf_counter()
         print(f"ViewBox paint: {(t1 - t0) * 1000:.1f}ms")
 
-# PlotWidgetをオーバーライド
+# Override PlotWidget
 
 
 class TimedPlotWidget(pg.PlotWidget):
@@ -105,7 +105,7 @@ class TimedPlotWidget(pg.PlotWidget):
         super().__init__(viewBox=TimedViewBox(), **kwargs)
 
 
-# pyqtgraph用関数
+# functions for pyqtgraph
 #
 # Initialize pyqtgraph
 def init_pg(title):
@@ -115,15 +115,15 @@ def init_pg(title):
     win.setBackground('w')
     return app, win
 
-# plot系関数
+# plot-related functions
 
 
 def decimate_for_range(x, y, x_min, x_max, max_points=5000):
     """
-    表示範囲内のデータだけ抽出して間引く
-    → ズームすると自動的に高解像度になる
+    Extract and decimate only the data within the displayed range
+    -> resolution automatically increases when zoomed in
     """
-    # 表示範囲内のデータを抽出
+    # extract the data within the displayed range
     mask = (x >= x_min) & (x <= x_max)
     x_vis = x[mask]
     y_vis = y[mask]
@@ -131,17 +131,17 @@ def decimate_for_range(x, y, x_min, x_max, max_points=5000):
     if len(x_vis) == 0:
         return x_vis, y_vis
 
-    # 範囲内の点数がmax_points以下なら元データをそのまま使用
+    # use the original data as-is if the number of points in range is under max_points
     if len(x_vis) <= max_points:
         return x_vis, y_vis
 
-    # 多い場合は間引く
+    # decimate if there are too many
     step = len(x_vis) // max_points
     return x_vis[::step], y_vis[::step]
 
 
 def decimate_fixed(x, y, max_points=5000):
-    """均等間引き：最もシンプルで高速"""
+    """Uniform decimation: simplest and fastest"""
     n = len(x)
     if n <= max_points:
         return x, y
@@ -180,9 +180,10 @@ def mouseMoved(evt, plots, vLine, hLine, xy):
 def mouseMovedImage(evt, plots, vLine, hLine, xyz):
     pos = evt
     xlab, xunit = next(iter(xyz.xlabel.values()))
-    # plot_scalogram()はzip(plots.plts, xyz.data, xyz.labels)でPanel毎にImageを作るため、
-    # plots.plts[k]はxyz.data[k]/xyz.labels[k]と対応する。以前はk(=0)を決め打ちしており、
-    # どのPanelをホバーしてもチャンネル0のLabelしか表示されなかった。
+    # plot_scalogram() creates one Image per panel via
+    # zip(plots.plts, xyz.data, xyz.labels), so plots.plts[k] corresponds to
+    # xyz.data[k]/xyz.labels[k]. This used to hard-code k(=0), so hovering
+    # over any panel only ever showed channel 0's label.
     for k, p in enumerate(plots.plts):
         if p.sceneBoundingRect().contains(pos):
             mouse_point = p.vb.mapSceneToView(pos)
@@ -190,7 +191,7 @@ def mouseMovedImage(evt, plots, vLine, hLine, xyz):
             image_data = xyz.data[k]
             time = image_data[0]
             ylab, yunit = next(iter(xyz.labels[k].values()))
-            # 画像の値を取得（境界チェック付き）
+            # get the image value (with bounds checking)
             if 0 <= x < time[-1] and 0 <= y < image_data[0].shape[0]:
                 label_text = make_title_span(plots.title)
                 label_text += f'<span style="font-size: 12pt"><span style="color:green"> {xlab}={
@@ -211,7 +212,7 @@ def make_title_span(str):
     return f'<span style="background-color: #333333; color: #e6e6e6; font-size: 13pt; padding: 3px 6px;">{str}:</span>'
 
 ##
-# win add系関数
+# win.addItem-related functions
 ##
 # make plot
 
@@ -220,7 +221,7 @@ def mk_plot(win, layout):
     plt = win.addPlot(row=layout[0], col=layout[1])
     plt.avgPen = pg.mkPen('#000000')
     plt.avgShadowPen = pg.mkPen('#8080DD', width=10)
-#    plt.getViewBox().setBackgroundColor('#DDDDDD')  # 灰色
+#    plt.getViewBox().setBackgroundColor('#DDDDDD')  # gray
     plt.showGrid(x=True, y=True, alpha=0.8)
     plt.setAutoVisible(y=True)
     win.ci.layout.setRowStretchFactor(layout[0], layout[2])  # set StretchFactor
@@ -263,7 +264,7 @@ def mk_image0(plt, justify, values, ax_label):
     plt.addItem(img)
     img.setColorMap(cmap)
     colorbar = plt.addColorBar(img, colorMap=cmap, values=values)
-    set_axis_label(plt, ax_label)              # 軸ラベル
+    set_axis_label(plt, ax_label)              # axis label
     return img, colorbar
 
 # make image
@@ -281,9 +282,9 @@ def mk_image(win, layout, justify, values, ax_label):
     p.addItem(img)
     img.setColorMap(cmap)
     p.addColorBar(img, colorMap=cmap, values=values)
-    set_axis_label(p, ax_label)              # 軸ラベル
-#    p.setLabel("bottom", ax_label[0])  # x軸にラベルを設定
-#    p.setLabel("left", ax_label[1])   # y軸にラベルを設定
+    set_axis_label(p, ax_label)              # axis label
+#    p.setLabel("bottom", ax_label[0])  # set the x-axis label
+#    p.setLabel("left", ax_label[1])   # set the y-axis label
     win.ci.layout.setRowStretchFactor(layout[0], layout[2])  # set StretchFactor
     return p, img
 
@@ -329,8 +330,8 @@ def v_line(pos, col):
     return pg.InfiniteLine(pos=pos, angle=90, pen=pg.mkPen(color=col, width=4))
 
 # make checkbox
-#  (ex. plotの表示・非表示を選択)
-#  return: チェックボックスとラベルのリスト
+#  (e.g. choosing whether to show/hide a plot)
+#  return: a list of checkboxes and labels
 
 
 def mk_checkbox(labels, func, isChecked=True):
@@ -339,7 +340,7 @@ def mk_checkbox(labels, func, isChecked=True):
     for lab in labels:
         checkbox_layout = QVBoxLayout()
         checkbox = QCheckBox("")
-        checkbox.setChecked(isChecked)                              # 初期状態は選択済み
+        checkbox.setChecked(isChecked)                              # checked by default
         checkbox_layout.addWidget(QLabel(f"{lab}"))
         checkbox_layout.addWidget(checkbox)
         checkbox.stateChanged.connect(func)
@@ -349,12 +350,12 @@ def mk_checkbox(labels, func, isChecked=True):
 
 
 # make radiobutton
-# (ex. checkpointsのlistで初期時間をshiftさせる。初期選択値はsel)
+# (e.g. shifting the initial time in a list of checkpoints; `sel` is the initially selected value)
 
 def mk_radiobuttons(num, sel, func):
     radiobuttons_layout = QHBoxLayout()
     button_group = QButtonGroup()
-    button_group.setExclusive(True)  # ラジオボタンを排他選択モードに設定
+    button_group.setExclusive(True)  # set the radio buttons to exclusive-selection mode
     for lab in range(num):
         radiobutton_layout = QVBoxLayout()
         label = QLabel(f"{lab}")
@@ -362,9 +363,9 @@ def mk_radiobuttons(num, sel, func):
         radiobutton_layout.addWidget(label)
         radiobutton_layout.addWidget(radiobutton)
         if lab == sel:
-            radiobutton.setChecked(True)  # 最初のボタンを選択状態
+            radiobutton.setChecked(True)  # select the first button
         button_group.addButton(radiobutton, id=lab)
-        radiobutton.toggled.connect(func)  # ラジオボタンの選択時の動作を接続
+        radiobutton.toggled.connect(func)  # connect the action for when a radio button is selected
         radiobuttons_layout.addLayout(radiobutton_layout)
     return radiobuttons_layout, button_group
 
@@ -375,14 +376,15 @@ def create_shift_input(
         max_length=10,
         tooltip=None):
     """
-    Shift 入力用のラベル付きレイアウトを返す。
+    Return a labeled layout for the Shift input.
 
     Returns:
-        QWidget: ラベルと QLineEdit を含む縦レイアウト widget
-        QLineEdit: 入力フィールド（呼び出し元で値取得用に使う）
+        QWidget: a vertical layout widget containing the label and QLineEdit
+        QLineEdit: the input field (used by the caller to read the value)
     """
-    # デフォルト引数はimport時に一度だけ評価されるため、--langが確定してから
-    # 呼ばれる関数本体側でカタログを引く（Noneセンチネルで遅延解決）。
+    # Default arguments are evaluated once, at import time, before --lang is
+    # resolved, so the catalog lookup happens in the function body instead,
+    # which is only called after --lang is settled (deferred via a None sentinel).
     if placeholder is None:
         placeholder = tr('pu.shift_placeholder')
     if tooltip is None:
@@ -411,17 +413,17 @@ def create_labeled_slider(
         interval: int = 1,
         orientation=Qt.Horizontal):
     """
-    スライダーとラベルを一体化して返すウィジェットを生成。
+    Create a widget combining a slider and its label.
     Parameters:
-        title (str): ラベルのタイトル（何のスライダーか）
-        minimum (int): スライダーの最小値
-        maximum (int): スライダーの最大値
-        initial (int): 初期値
-        interval (int): 目盛の間隔
-        orientation (Qt.Orientation): Qt.Horizontal または Qt.Vertical
+        title (str): the label's title (what the slider is for)
+        minimum (int): the slider's minimum value
+        maximum (int): the slider's maximum value
+        initial (int): the initial value
+        interval (int): the tick interval
+        orientation (Qt.Orientation): Qt.Horizontal or Qt.Vertical
     Returns:
-        QWidget: スライダーとラベルを含むウィジェット
-        QSlider: スライダーオブジェクト（外部からアクセス可能）
+        QWidget: the widget containing the slider and label
+        QSlider: the slider object (accessible externally)
     """
     container = QWidget()
     layout = QVBoxLayout() if orientation == Qt.Horizontal else QVBoxLayout()
@@ -434,7 +436,7 @@ def create_labeled_slider(
     slider.setTickPosition(QSlider.TicksBelow if orientation ==
                            Qt.Horizontal else QSlider.TicksLeft)
 
-    # スライダーの値が変わったらラベルも更新
+    # also update the label whenever the slider's value changes
     slider.valueChanged.connect(lambda value: label.setText(f"{title}: {value}sec"))
 
     layout.addWidget(label)
@@ -452,16 +454,16 @@ def set_bg_color(history):
 ####
 
 def find_nearest(array, value):
-    """ソート済み配列に対して二分探索で最近傍indexを返す"""
+    """Binary search on a sorted array; returns the nearest index"""
     if array is None or len(array) == 0:
         return None
     idx = np.searchsorted(array, value)
-    # 境界チェック
+    # bounds check
     if idx == 0:
         return 0
     if idx >= len(array):
         return len(array) - 1
-    # value が array[idx-1] と array[idx] のどちらに近いか
+    # whether value is closer to array[idx-1] or array[idx]
     if abs(array[idx - 1] - value) <= abs(array[idx] - value):
         return idx - 1
     return idx

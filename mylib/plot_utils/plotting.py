@@ -18,14 +18,15 @@ from mylib.plot_utils.common import (COLORS, add_right_axis, decimate_fixed,
 from mylib.plot_utils.reading import PlotData
 
 # Initialize plots
-# 図の数(num_plots)分のplotとcontrol用plot(p_base)を用意,labelがrow=0なので1からcount
+# Prepare num_plots plots plus one control plot (p_base); rows start at 1 since the label is row=0
 
 
 class InitPlots:
     def __init__(self, win, num_plots):
         self.title = ''
-        # col=0はFull Rangeボタン専用の細いgutter列として空けておき、実際のプロット群は
-        # col=1から配置する(mk_label/mk_plotとも第2要素がcol)。
+        # Leave col=0 as a narrow gutter column reserved for the Full Range
+        # button; the actual plots are placed starting at col=1 (the second
+        # element of both mk_label's and mk_plot's layout is the column).
         self.label = mk_label(win, layout=[0, 1, 1], justify='left')  # right')  # make label
         self.plts, self.plts_right = [], []
         for i in range(num_plots):
@@ -35,13 +36,17 @@ class InitPlots:
             self.plts_right.append(p2)
         self.color = COLORS[:num_plots]
         self.p_base = mk_plot(win, layout=[num_plots + 1, 1, 1])
-        # 目盛りの数値自体は意味を持たない(概観用)ので非表示にする。ただしhideAxisで
-        # 軸領域ごと消すとp1/p2とのY軸幅が揃わず、上のグラフ群とX軸がズレて見えるため、
-        # 目盛りの値の表示だけを消し、軸の占有幅はそのまま残す。
+        # The tick values themselves carry no meaning here (this is just an
+        # overview plot), so hide them. Removing the whole axis area with
+        # hideAxis, though, would misalign this Y axis width with p1/p2's,
+        # making the X axis look shifted relative to the plots above -- so
+        # only the tick value display is hidden, and the axis still occupies
+        # its usual width.
         self.p_base.getAxis('left').setStyle(showValues=False)
 
-        # 最下段(p_base)左の空きスペースにFull Range切替ボタンを置く。押しやすさ向上のため
-        # 上部ツールバーのFull Rangeボタンと隣接させた操作性向上の要望に対応。
+        # Place the Full Range toggle button in the empty space to the left
+        # of the bottom row (p_base). This addresses the request to place it
+        # next to the top toolbar's Full Range button for easier access.
         self.full_range_button = QPushButton("F")
         self.full_range_button.setFixedWidth(24)
         self.full_range_button.setToolTip(tr('plot.gui.full_range_tip'))
@@ -77,11 +82,11 @@ class InitPlots:
                 p2.scene().removeItem(p2)
         self.plts_right.clear()
 
-    # 軸を非表示にする
+    # Hide the axis
     def toggle_right_axis(self, visible):
         for p1 in self.plts:
-            p1.getAxis('right').setStyle(showValues=visible)  # 目盛りを非表示
-            p1.getAxis('right').setVisible(visible)           # 軸自体の表示非表示
+            p1.getAxis('right').setStyle(showValues=visible)  # hide the tick values
+            p1.getAxis('right').setVisible(visible)           # show/hide the axis itself
 
     def show_or_hide(self, win, check):
         if check:
@@ -99,15 +104,15 @@ class InitPlots:
 def plot_timeseries(plots, xy):
     curves = []
 
-    assert len(xy.data) == len(xy.labels) == len(plots.plts), "長さが一致していません"
+    assert len(xy.data) == len(xy.labels) == len(plots.plts), "lengths do not match"
     for (x, y), l, p, col in zip(xy.data, xy.labels, plots.plts, COLORS):
-        set_axis_label(p, l)              # y軸ラベル
-        x_d, y_d = decimate_fixed(x, y)  # ✅ 間引き
+        set_axis_label(p, l)              # y-axis label
+        x_d, y_d = decimate_fixed(x, y)  # decimate
         print(tr('pu.decimate_points', before=len(x), after=len(x_d)))
         curves.append(p.plot(x_d, y_d, pen=pg.mkPen(color=col, width=5), skipFiniteCheck=True))
 
     # Region select
-    set_axis_label(plots.p_base, xy.xlabel)  # x軸ラベル
+    set_axis_label(plots.p_base, xy.xlabel)  # x-axis label
     x_d0, y_d0 = decimate_fixed(xy.data[0][0], xy.data[0][1])
     p_base_plot = plots.p_base.plot(x_d0, y_d0, pen="black", skipFiniteCheck=True)
 
@@ -122,23 +127,23 @@ def plot_timeseries(plots, xy):
 
 def add_timeseries(plots, xy):
     curves = []
-    assert len(xy.data) == len(xy.labels) == len(plots.plts), "長さが一致していません"
+    assert len(xy.data) == len(xy.labels) == len(plots.plts), "lengths do not match"
     for (x, y), l, p, col in zip(xy.data, xy.labels, plots.plts, COLORS[1:]):
-        # set_axis_label(p, l)              # y軸ラベル
-        x_d, y_d = decimate_fixed(x, y)  # ✅ 間引き
+        # set_axis_label(p, l)              # y-axis label
+        x_d, y_d = decimate_fixed(x, y)  # decimate
         curves.append(p.plot(x_d, y_d, pen=pg.mkPen(color=col, width=5)))
     return curves
 
-# plot right axis (複数curve対応)
+# plot right axis (supports multiple curves)
 
 
 def plot_right_axis(plts_right, xys):
     curves_all = []
     for num, xy in enumerate(xys):
         curves = []
-        assert len(xy.data) == len(xy.labels) == len(plts_right), "長さが一致していません"
+        assert len(xy.data) == len(xy.labels) == len(plts_right), "lengths do not match"
         for (x, y), l, p, col in zip(xy.data, xy.labels, plts_right, COLORS[num + 1:]):
-            # set_axis_label(p, l)              # y軸ラベル
+            # set_axis_label(p, l)              # y-axis label
             curve = pg.PlotDataItem(x, y, pen=pg.mkPen(color=col, width=5))
             p.addItem(curve)
             curves.append(curve)
@@ -176,7 +181,7 @@ def calc_peaks_and_valleys(xy):
     valleys_data.xlabel = xy.xlabel
     valleys_data.title = tr('pu.prominence_10pct')
     for x, y in xy.data:
-        # yの変動幅に対して10%のprominence
+        # 10% of y's variation range as the prominence
         prominence_value = 0.1 * (np.max(y) - np.min(y))
         p_t, p_y = find_peaks_in_timeseries(x, y, prominence=prominence_value)
         v_t, v_y = find_peaks_in_timeseries(x, -y, prominence=prominence_value)
@@ -198,7 +203,7 @@ def plot_scalogram(plots, xyz):
     im, cb = mk_image0(plots.p_base, justify='right', values=(np.min(r), np.max(r)), ax_label=None)
     im.setImage(r.T)
     im.setRect(pg.QtCore.QRectF(t[0], f[0], t[-1] - t[0], f[-1] - f[0]))
-    set_axis_label(plots.p_base, xyz.xlabel)  # x軸ラベル（plot_timeseries同様、都度明示的に設定）
+    set_axis_label(plots.p_base, xyz.xlabel)  # x-axis label (set explicitly each time, same as plot_timeseries)
 
     region_mgr = RegionManager(plots.p_base, im, plots.plts)
     colorbar.append(cb)
@@ -216,46 +221,53 @@ def shift_image(im, t, f, offset):
 
 
 def plot_timeinterval_histogram(win, time):
-    # 単位は秒のまま渡す。pyqtgraphのAxisItemはunits='s'から自動でms/us等の
-    # SI接頭辞を選んで表示するため、ここで先にmsへ換算して単位も'ms'にすると、
-    # 間隔が1ms未満(高ODR等)の場合に「m」が二重に付き"(mms)"という誤表示になる。
+    # Pass the unit through as seconds. pyqtgraph's AxisItem auto-picks an
+    # SI prefix (ms/us/etc.) to display from units='s', so pre-converting to
+    # ms and setting the unit to 'ms' here would double up the 'm' prefix
+    # into a wrong "(mms)" label whenever the interval is under 1ms (e.g. at
+    # a high ODR).
     diff_timeinterval = np.diff(time)
     title = tr('pu.time_interval_histogram_title')
-    plt = win.addPlot(title=title)               # プロット領域を追加
-    # チェックポイント等による稀な大きな間隔をそのまま等幅binの範囲に含めると、
-    # 大多数のサンプル間隔が全体幅の1%にも満たない1binへ押し込まれてしまい、
-    # 「ヒストグラムと書いてあるのに実質1本の細い針にしか見えない」状態になる。
-    # ヒストグラムは本来binの面積(=幅×高さ)が意味を持つべきなので、表示範囲は
-    # 分布の主要部分(1〜99パーセンタイル)に絞り、外れ値は両端のbinへ
-    # まとめて含める(np.clip)ことで、実データの分布形状が見えるようにする。
+    plt = win.addPlot(title=title)               # add the plot area
+    # Including a rare large gap (e.g. from a checkpoint) as-is in the
+    # equal-width bin range pushes the vast majority of sample intervals,
+    # which span less than 1% of the total width, into a single bin -- the
+    # plot ends up looking like a single thin needle despite being labeled a
+    # histogram. A histogram's bin area (width x height) is what should
+    # carry meaning, so the displayed range is restricted to the main body
+    # of the distribution (the 1st-99th percentile) and outliers are folded
+    # into the end bins (via np.clip), so the actual shape of the data's
+    # distribution remains visible.
     lo, hi = np.percentile(diff_timeinterval, [1, 99])
     display_data = np.clip(diff_timeinterval, lo, hi) if hi > lo else diff_timeinterval
     optimal_bins = auto_bins(display_data)  # or get_optimal_bins(display_data)
     y, x = np.histogram(display_data, bins=optimal_bins)
-    # brushだけ赤にしてもpenを指定しないとpyqtgraphが既定の不透明な灰色(200,200,200)を
-    # 各binの境界線に使うため、bin数が多い/幅が狭いと不透明な灰色の輪郭線の方が半透明の
-    # 赤い塗りより視覚的に優勢になり、全体が灰色っぽく見えてしまう。penも赤系にして揃える。
+    # Setting only the brush to red without also specifying a pen leaves
+    # pyqtgraph's default opaque gray (200,200,200) as each bin's border, so
+    # when there are many/narrow bins, that opaque gray outline visually
+    # dominates over the translucent red fill and the whole plot ends up
+    # looking grayish. Set the pen to a matching red as well.
     plt.plot(x, y, stepMode=True, fillLevel=0,
-              pen=(150, 0, 0), brush=(255, 0, 0, 150))                  # ヒストグラム描画(灰色背景上で目立つ赤)
-    plt.setLabels(left='Count', bottom=('Time Interval', 's'))         # 軸ラベル設定
-    plt.showGrid(x=True, y=True)                                       # グリッド表示
+              pen=(150, 0, 0), brush=(255, 0, 0, 150))                  # draw the histogram (red stands out against the gray background)
+    plt.setLabels(left='Count', bottom=('Time Interval', 's'))         # set axis labels
+    plt.showGrid(x=True, y=True)                                       # show the grid
     return plt
 
 
 def find_peaks_in_timeseries(t, y, height=None, distance=None, prominence=None):
     """
-    時系列データからピークの位置と値を検出
+    Detect peak positions and values from time-series data
 
     Parameters:
-        t (array-like): 時刻の配列
-        y (array-like): 値の配列
-        height (float or tuple, optional): ピークの最小/最大高さ
-        distance (int, optional): ピーク間の最小距離（サンプル数）
-        prominence (float, optional): ピークの目立ち度（prominence）
+        t (array-like): array of timestamps
+        y (array-like): array of values
+        height (float or tuple, optional): minimum/maximum peak height
+        distance (int, optional): minimum distance between peaks (in samples)
+        prominence (float, optional): peak prominence
 
     Returns:
-        peaks_t (np.ndarray): ピークの時刻
-        peaks_y (np.ndarray): ピークの値
+        peaks_t (np.ndarray): peak timestamps
+        peaks_y (np.ndarray): peak values
     """
     peaks, _ = signal.find_peaks(y, height=height, distance=distance, prominence=prominence)
     peaks_t = np.array(t)[peaks]
@@ -264,26 +276,27 @@ def find_peaks_in_timeseries(t, y, height=None, distance=None, prominence=None):
 
 
 # For Histogram
-# ほぼ一定間隔のDataに外れ値が混じるとbin幅がほぼ0になり、bin数が爆発して
-# np.histogramがメモリ不足を起こすため上限を設ける。
+# When near-constant-interval data has a few outliers mixed in, the bin
+# width collapses toward 0 and the bin count explodes, which can make
+# np.histogram run out of memory -- so an upper bound is set.
 MAX_AUTO_BINS = 1000
 
 
 def auto_bins(data):
-    # Freedman-Diaconisの方法
+    # Freedman-Diaconis method
     iqr = np.percentile(data, 75) - np.percentile(data, 25)
     data_range = np.max(data) - np.min(data)
     if iqr <= 0 or data_range <= 0:
         return 10
-    h = 2 * iqr / (len(data) ** (1 / 3))  # bin幅
+    h = 2 * iqr / (len(data) ** (1 / 3))  # bin width
     bins = int(data_range / h)
-    return min(max(10, bins), MAX_AUTO_BINS)  # 最低10bins、最大MAX_AUTO_BINS bins
+    return min(max(10, bins), MAX_AUTO_BINS)  # minimum 10 bins, maximum MAX_AUTO_BINS bins
 
-# または
+# or
 
 
 def get_optimal_bins(data):
-    # Scottの標準偏差に基づく方法
+    # Method based on Scott's standard deviation rule
     std = np.std(data)
     data_range = np.max(data) - np.min(data)
     if std <= 0 or data_range <= 0:
@@ -294,31 +307,31 @@ def get_optimal_bins(data):
 
 
 class CrossHairManager:
-    """クロスヘアの生成・マウス連動を管理するクラス"""
+    """Class managing crosshair creation and mouse tracking"""
 
-    THROTTLE_MS = 16  # 60fps相当
+    THROTTLE_MS = 16  # roughly 60fps
 
     def __init__(self, funcMouseMoved, plots, xy):
         """
-        funcMouseMoved : マウス移動時に呼ぶ関数
-        plots          : プロット群オブジェクト
-        xy             : ラベル等の表示オブジェクト
+        funcMouseMoved : function to call on mouse movement
+        plots          : the plots object
+        xy             : the display object (labels, etc.)
         """
-        # --- 状態をインスタンス変数として保持 ---
+        # --- keep state as instance variables ---
         self.funcMouseMoved = funcMouseMoved
         self.plots = plots
         self.xy = xy
-        self._last_update = 0          # スロットリング用タイムスタンプ
+        self._last_update = 0          # timestamp used for throttling
 
-        # クロスヘアを生成してシグナル接続
+        # Create the crosshair and connect signals
         self.vLine, self.hLine = self._mk_cross_hair()
         self._connect_signals()
 
     # -------------------------------------------------- #
-    #  クロスヘア生成                                      #
+    #  Create the crosshair                              #
     # -------------------------------------------------- #
     def _mk_cross_hair(self):
-        """各プロットにクロスヘアラインを追加して返す"""
+        """Add and return a crosshair line for each plot"""
         vLine, hLine = [], []
         for p in self.plots.plts:
             vl = pg.InfiniteLine(angle=90, movable=False,
@@ -332,24 +345,24 @@ class CrossHairManager:
         return vLine, hLine
 
     # -------------------------------------------------- #
-    #  シグナル接続                                        #
+    #  Connect signals                                    #
     # -------------------------------------------------- #
     def _connect_signals(self):
-        """各プロットのマウス移動シグナルを接続する"""
+        """Connect each plot's mouse-move signal"""
         for p in self.plots.plts:
             p.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
     # -------------------------------------------------- #
-    #  マウス移動ハンドラ（スロットリング付き）             #
+    #  Mouse-move handler (throttled)                     #
     # -------------------------------------------------- #
     def _on_mouse_moved(self, evt):
-        """シグナルから直接呼ばれるメソッド"""
+        """Method called directly from the signal"""
         now = time.monotonic() * 1000
         if now - self._last_update < self.THROTTLE_MS:
-            return                        # スキップ
+            return                        # skip
         self._last_update = now
 
-        # 元の funcMouseMoved を呼び出す
+        # Call the original funcMouseMoved
         self.funcMouseMoved(
             evt,
             self.plots,
@@ -359,7 +372,7 @@ class CrossHairManager:
         )
 
     def cleanup(self):
-        """シーンからクロスヘアを安全に削除する"""
+        """Safely remove the crosshair from the scene"""
         for p, vl, hl in zip(self.plots.plts, self.vLine, self.hLine):
             try:
                 if vl.scene() is not None:
@@ -371,35 +384,35 @@ class CrossHairManager:
 
 
 class RegionManager:
-    """LinearRegionの生成・更新を管理するクラス"""
+    """Class managing LinearRegion creation and updates"""
 
-    THROTTLE_MS = 32  # ~30fps（regionはcrosshairより低くてOK）
+    THROTTLE_MS = 32  # ~30fps (the region can be lower than the crosshair)
 
     def __init__(self, p_base, plotted_data, plt, curves=None, xy=None):
-        self.curves = curves  # ✅ 追加
-        self.xy = xy      # ✅ 追加（元データ参照用）
+        self.curves = curves  # added
+        self.xy = xy      # added (for referencing the original data)
         self.x_shift = 0.0
         self.p_base = p_base
         self.plotted_data = plotted_data
         self.plt = plt
         self._last_region_update = 0
         self._last_range_update = 0
-        self._updating = False  # 再帰的更新防止フラグ
-        self._initialized = False  # ✅ 追加
-        self._data_min_x = None       # 全範囲ボタン用: データ全体のx範囲
+        self._updating = False  # flag to prevent recursive updates
+        self._initialized = False  # added
+        self._data_min_x = None       # for the full-range button: the full x range of the data
         self._data_max_x = None
-        self._saved_region = None     # 全範囲ボタン用: 直前に選択していた範囲
+        self._saved_region = None     # for the full-range button: the previously selected range
         self._full_range_active = False
 
-        # region生成・接続
+        # Create the region and connect signals
         self.region = self._mk_region()
         self._connect_signals()
 
-        # 初期範囲を遅延設定
+        # Set the initial range on a delay
         QtCore.QTimer.singleShot(0, self._set_initial_region)
 
     # -------------------------------------------------- #
-    #  region生成                                         #
+    #  Create the region                                  #
     # -------------------------------------------------- #
     def _mk_region(self):
         region = pg.LinearRegionItem(swapMode='block')
@@ -412,20 +425,20 @@ class RegionManager:
         return region
 
     # -------------------------------------------------- #
-    #  シグナル接続                                        #
+    #  Connect signals                                    #
     # -------------------------------------------------- #
     def _connect_signals(self):
-        # regionの変更シグナル
+        # region-changed signal
         self.region.sigRegionChanged.connect(self._on_region_changed)
 
-        # 各プロットのレンジ変更シグナル
+        # each plot's range-changed signal
         for p in self.plt:
             if not hasattr(p, '_region_update_connected'):
                 p.sigRangeChanged.connect(self._on_range_changed)
                 p._region_update_connected = True
 
     # -------------------------------------------------- #
-    #  初期region範囲設定                                  #
+    #  Set the initial region range                       #
     # -------------------------------------------------- #
     def _set_initial_region(self):
         if isinstance(self.plotted_data, pg.PlotDataItem):
@@ -449,40 +462,42 @@ class RegionManager:
         end = start + range_width * 0.7
         self.region.setRegion([start, end])
         self._data_min_x, self._data_max_x = min_x, max_x
-        self._initialized = True  # ✅ 設定完了
+        self._initialized = True  # setup complete
 
     def set_x_shift(self, shift):
         self.x_shift = shift
 
     # -------------------------------------------------- #
-    #  全範囲表示トグル                                    #
+    #  Toggle full-range display                          #
     # -------------------------------------------------- #
     def toggle_full_range(self):
-        """全範囲表示 <-> 直前に選択していた範囲、を1回押すごとに切り替える。
-        戻り値: 切り替え後、全範囲表示中であればTrue(呼び出し側でボタンの見た目同期に使う)。"""
+        """Toggle between full-range display and the previously selected
+        range each time this is called.
+        Returns: True if full-range display is active after the toggle
+        (used by the caller to sync the button's appearance)."""
         if self._full_range_active:
             if self._saved_region is not None:
                 self.region.setRegion(self._saved_region)
             self._full_range_active = False
         else:
             if self._data_min_x is None or self._data_max_x is None:
-                return False  # 初期region設定がまだ終わっていない
+                return False  # the initial region hasn't been set up yet
             self._saved_region = self.region.getRegion()
             self.region.setRegion([self._data_min_x, self._data_max_x])
             self._full_range_active = True
         return self._full_range_active
 
     # -------------------------------------------------- #
-    #  regionが動いたとき → プロットのx範囲を更新          #
+    #  When the region moves -> update the plots' x range  #
     # -------------------------------------------------- #
     def _on_region_changed(self):
-        # スロットリング
+        # throttling
         now = time.monotonic() * 1000
         if now - self._last_region_update < self.THROTTLE_MS:
             return
         self._last_region_update = now
 
-        # 再帰防止
+        # prevent recursion
         if self._updating:
             return
         self._updating = True
@@ -492,10 +507,10 @@ class RegionManager:
             for p in self.plt:
                 p.setXRange(min_x, max_x, padding=0)
 
-            # ✅ 表示範囲内のデータを高解像度で再描画
+            # Redraw the data within the displayed range at higher resolution
             if self.curves and self.xy:
                 for cur, (x, y) in zip(self.curves, self.xy.data):
-                    x_shifted = x - self.x_shift  # ✅ シフトを適用
+                    x_shifted = x - self.x_shift  # apply the shift
                     x_d, y_d = decimate_for_range(x_shifted, y, min_x, max_x)
                     cur.setData(x_d, y_d)
 
@@ -503,17 +518,17 @@ class RegionManager:
             self._updating = False
 
     def _on_range_changed(self, view, range_):
-        # ✅ 初期化完了前は無視する
+        # ignore until initialization is complete
         if not self._initialized:
             return
 
-        # スロットリング
+        # throttling
         now = time.monotonic() * 1000
         if now - self._last_range_update < self.THROTTLE_MS:
             return
         self._last_range_update = now
 
-        # 再帰防止
+        # prevent recursion
         if self._updating:
             return
         self._updating = True
@@ -525,7 +540,7 @@ class RegionManager:
             self._updating = False
 
     def cleanup(self):
-        """シーンからアイテムを安全に削除する"""
+        """Safely remove the item from the scene"""
         try:
             if self.region.scene() is not None:
                 self.p_base.removeItem(self.region)

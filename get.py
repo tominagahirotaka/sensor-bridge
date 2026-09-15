@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-sensor-bridge: データ取得モジュール
-Raspberry Pi Pico / Pico W からバイナリデータを取得する
+sensor-bridge: data acquisition module
+Acquires binary data from a Raspberry Pi Pico / Pico W.
 """
 
 import argparse

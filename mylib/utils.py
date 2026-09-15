@@ -19,7 +19,7 @@ def read_setting_ini(fname):
     (e.g. 'figs', 'panel1', 'menubar').
     """
     ini = configparser.ConfigParser(interpolation=None)
-    ini.optionxform = str    # 大文字小文字を区別する
+    ini.optionxform = str    # preserve case (don't lowercase keys)
     ini.read(fname, 'UTF-8')
     env_set, code = {}, {}
     for sec in ini.sections():
@@ -136,8 +136,10 @@ def calc_target_Calbonen_age(age, resting_heart_rate, strength):
 
 def find_peaks(a, amp_thre, local_width=1, min_peak_distance=1):
     """
-    閾値と極大・極小を判定する窓幅、ピーク間最小距離を与えて配列からピークを検出する。
-    内部的にはピーク間距離は正負で区別して算出されるため、近接した正負のピークは検出される。
+    Detect peaks in an array, given an amplitude threshold, the local window
+    width used to judge local maxima/minima, and the minimum peak distance.
+    Peak distance is tracked separately for positive and negative peaks
+    internally, so nearby positive and negative peaks are both detected.
     :rtype (int, float)
     :return ndarray of peak indices
     """

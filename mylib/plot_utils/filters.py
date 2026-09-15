@@ -9,7 +9,7 @@ from mylib.i18n import t as tr
 from mylib.plot_utils.reading import PlotData
 
 
-# 移動平均を計算
+# Compute the moving average
 def do_ma(xy, mva_sec):
     t = xy.data[0][0]
     delta_t = (t[-1] - t[0]) / (len(t) - 1)
@@ -26,7 +26,7 @@ def do_ma(xy, mva_sec):
         mv.add_series(t, y, label=lab)
     return mv
 
-# 累積和を計算
+# Compute the cumulative sum
 
 
 def calc_cumsum(xy):
@@ -41,22 +41,22 @@ def calc_cumsum(xy):
     return cm
 
 
-def calc_ma(data, window):  # 端を無視して「正確な部分」だけ使う（mode='valid'）
+def calc_ma(data, window):  # ignore the edges and use only the "exact" portion (mode='valid')
     t, y = data
     filtered_y = np.convolve(y, np.ones(window) / window, mode='valid')
-    # filtered_yの長さは len(y) - window + 1
+    # filtered_y's length is len(y) - window + 1
     start = window // 2
     end = start + len(filtered_y)
     t_new = t[start:end]
     return (t_new, filtered_y)
 
-# filter系関数
+# filter-related functions
 
 
 def apply_filters(data, filter_history, cpt_lst=None):
     """
-    filter_historyに従ってフィルタを適用する。
-    cpt_lst: チェックポイントのリスト（省略可）
+    Apply filters according to filter_history.
+    cpt_lst: the list of checkpoints (optional)
     """
     if cpt_lst is None:
         cpt_lst = []
@@ -90,14 +90,14 @@ def apply_default_filters(data_list, default_filter, cpt_lst=None):
     """
     Parameters
     ----------
-    data_list : list of (t, y) タプル
+    data_list : list of (t, y) tuples
     default_filter : dict or list
-    cpt_lst : チェックポイントのリスト（省略可）
+    cpt_lst : the list of checkpoints (optional)
 
     Returns
     -------
     filter_history : dict  {idx: filter_history}
-    data_list      : list  フィルタ適用後のデータ
+    data_list      : list  the data after filters are applied
     """
     if cpt_lst is None:
         cpt_lst = []
@@ -122,8 +122,8 @@ def apply_default_filters(data_list, default_filter, cpt_lst=None):
 
 class SignalFilter:
     """
-    信号平滑化フィルタ群をまとめたクラス。
-    data = (t, y) のタプルを受け取り、各フィルタを適用して返す。
+    Class bundling the signal-smoothing filters together.
+    Takes data = a (t, y) tuple, applies each filter, and returns the result.
     """
 
     METHOD_MAP = {
@@ -139,7 +139,7 @@ class SignalFilter:
         """
         Parameters
         ----------
-        data : (t, y) のタプル
+        data : a (t, y) tuple
         """
         self.t, self.y = data
 
@@ -149,31 +149,31 @@ class SignalFilter:
 
     @property
     def fs(self) -> float:
-        """現在のサンプリング周波数 [Hz]"""
+        """Current sampling frequency [Hz]"""
         return 1 / (self.t[1] - self.t[0])
 
     @property
     def nyq(self) -> float:
-        """ナイキスト周波数 [Hz]"""
+        """Nyquist frequency [Hz]"""
         return self.fs / 2
 
     # ------------------------------------------------------------------ #
-    #  各フィルタメソッド（in-placeで self.t, self.y を更新して self を返す）
+    #  Individual filter methods (update self.t, self.y in-place and return self) #
     # ------------------------------------------------------------------ #
 
     def trim(self, t_min: float, t_max: float = None, reset_t0: bool = False) -> "SignalFilter":
         """
-        時系列を指定範囲 [t_min, t_max] でカットする
+        Cut the time series to the given range [t_min, t_max]
         """
         if t_min is None:
             t_min = self.t[0]
         if t_max is None:
-            t_max = self.t[-1]  # Noneの場合はデータの最大値を使用
+            t_max = self.t[-1]  # use the data's max value when None
         mask = (self.t >= t_min) & (self.t <= t_max)
         self.t = self.t[mask]
         self.y = self.y[mask]
         if reset_t0:
-            self.t = self.t - self.t[0]  # t_min の時点を 0 にオフセット
+            self.t = self.t - self.t[0]  # offset so t_min's point becomes 0
         return self
 
     def downsample(self, new_fs: int, is_anti_alias: bool) -> "SignalFilter":
@@ -192,7 +192,7 @@ class SignalFilter:
         return self
 
     def moving_average(self, window: int) -> "SignalFilter":
-        """端を無視して「正確な部分」だけ使う（mode='valid'）"""
+        """Ignore the edges and use only the "exact" portion (mode='valid')"""
         filtered_y = np.convolve(self.y, np.ones(window) / window, mode='valid')
         start = window // 2
         end = start + len(filtered_y)
@@ -227,16 +227,16 @@ class SignalFilter:
         return self
 
     # ------------------------------------------------------------------ #
-    #  パイプライン実行
+    #  Pipeline execution
     # ------------------------------------------------------------------ #
 
     def apply(self, history: list) -> "SignalFilter":
         """
-        history のリストに従って連続でフィルタを適用する。
+        Apply filters in sequence according to the history list.
 
         Parameters
         ----------
-        history : [('DS', (new_fs, is_anti_alias)), ('LP', (cutoff,)), ...] の形式
+        history : in the form [('DS', (new_fs, is_anti_alias)), ('LP', (cutoff,)), ...]
         """
         for method_key, params in history:
             method_name = self.METHOD_MAP.get(method_key)

@@ -37,17 +37,17 @@ def do_compute_time_varying_freq_amp(xy):
         lab = {k: (v[0], '') for k, v in l.items()}
         pv_freq.add_series(time, freq, label=lab)
         pv_amp.add_series(time, amp, label=lab)
-        # energy & powerを計算
+        # compute energy & power
         energy.add_series(time, (amp * freq)**2, label=lab)
         power.add_series(time, amp**2, label=lab)
     return pv_freq, pv_amp, energy, power
 
-# wavelet変換用Class
+# Class for the wavelet transform
 
 
 @dataclass
 class WaveletParams:
-    # rangeOfFreq = [1.2, 2.2, 0.001] # 周波数[min,max,step]
+    # rangeOfFreq = [1.2, 2.2, 0.001] # frequency [min, max, step]
     range: list = field(default_factory=lambda: [1.2, 3.0, 0.01])
     omega0: float = 6
 
@@ -77,7 +77,7 @@ class WaveletParams:
     def __str__(self):
         return self.__repr__()
 
-# wavelet変換
+# wavelet transform
 
 
 def do_wavelet_transform(xy, params: WaveletParams = WaveletParams()):
@@ -104,28 +104,28 @@ def do_wavelet_transform(xy, params: WaveletParams = WaveletParams()):
     max_power_bpm.xlabel = wv_data.xlabel
 
     for (x, y), l in zip(xy.data, xy.labels):
-        # wavelet変換(swanが処理できなくなるのでデータを半分間引く)
+        # wavelet transform (data is decimated by half since swan can't handle the full rate)
         x_sub = x[data_skip:-data_skip - 1:data_skip]
         y_sub = y[data_skip:-data_skip - 1:data_skip]
-        # continuous wavelet transform実行
+        # run the continuous wavelet transform
         freq, result = calc_wavelet(x_sub, y_sub, params)
         lab = {k: (v[0], 'Hz') for k, v in l.items()}
         wv_data.add_series(x_sub, freq, result, label=lab)
-        # energy & power & max power freq を計算
+        # compute energy & power & max power freq
         lab = {k: (v[0], '') for k, v in l.items()}
         energy.add_series(x_sub, ene := np.sum((result.T * freq)**2, axis=1), label=lab)
         lab = {k: (v[0], '') for k, v in l.items()}
         power.add_series(x_sub, np.sum(result.T**2, axis=1), label=lab)
         lab = {k: (v[0], 'Hz') for k, v in l.items()}
-        # 各時間ステップで最大の power の index を取得
+        # get the index of the max power at each time step
         max_power_indices = np.argmax(result, axis=0)  # shape: (n_times,)
-        # index に対応する周波数を取得
+        # get the frequency corresponding to that index
         dominant_freqs = freq[max_power_indices]     # shape: (n_times,)
-        threshold = 0.1 * np.max(result)  # 最大値の10%
+        threshold = 0.1 * np.max(result)  # 10% of the max value
         # dominant_freqs_filtered = np.where(
         #     power[max_power_indices, np.arange(result.shape[1])] > threshold,
         #     freqs[max_power_indices],
-        #     np.nan  # 閾値未満は NaN
+        #     np.nan  # NaN below the threshold
         # )
 #        max_power_freq.add_series(x_sub, dominant_freqs_filtered, label=lab)
         max_power_freq.add_series(x_sub, dominant_freqs, label=lab)
@@ -150,25 +150,25 @@ def do_power_spectrum(xy):
 
 def compute_power_spectrum(x, y):
     """
-    パワースペクトルを計算する関数。
+    Function to compute the power spectrum.
     Parameters:
-        x (array-like): 時間軸またはx軸（等間隔であることが望ましい）
-        y (array-like): 信号データ（y軸）
+        x (array-like): the time axis or x axis (ideally evenly spaced)
+        y (array-like): the signal data (y axis)
 
     Returns:
-        freqs (ndarray): 周波数成分
-        power (ndarray): パワースペクトル（振幅の2乗）
+        freqs (ndarray): frequency components
+        power (ndarray): power spectrum (amplitude squared)
     """
     x = np.asarray(x)
     y = np.asarray(y)
 
-    # サンプリング間隔（平均値で推定）
+    # sampling interval (estimated from the mean)
     dt = np.mean(np.diff(x))
-    fs = 1.0 / dt  # サンプリング周波数
+    fs = 1.0 / dt  # sampling frequency
     # FFT
     fft_vals = np.fft.fft(y)
     fft_freqs = np.fft.fftfreq(len(y), d=dt)
-    # パワースペクトル（正の周波数のみ）
+    # power spectrum (positive frequencies only)
     positive_freqs = fft_freqs > 0
     freqs = fft_freqs[positive_freqs]
     power = np.abs(fft_vals[positive_freqs])**2 / len(y)
@@ -176,15 +176,15 @@ def compute_power_spectrum(x, y):
 
 
 def pair_peaks_valleys(peaks, valleys):
-    """ピークごとに最近傍の谷をペアリング"""
+    """Pair each peak with its nearest valley"""
     pairs = []
     for p in peaks:
-        # 距離が最も近い valley を探す
+        # find the valley with the smallest distance
         if len(valleys) == 0:
             continue
         idx = np.argmin(np.abs(valleys - p))
         v = valleys[idx]
-        # 左右の順序は問わず登録
+        # register regardless of left/right order
         pairs.append((min(p, v), max(p, v)))
     return pairs
 
@@ -214,14 +214,14 @@ def compute_time_varying_freq_amp(t, y, peaks, valleys):
     return np.array(times), np.array(freqs), np.array(amps)
 
 ####
-# arrayの中でvalueに最も近い値のindexを返す
+# Return the index of the value in array closest to value
 
 
 def calc_wavelet(x, y, params):
-    from swan import pycwt   # pip install swan でinstallする必要あり
+    from swan import pycwt   # must be installed via pip install swan
     dt = (x[-1] - x[0]) / (len(x) - 1)
     Fs = 1 / dt
     freqs = np.arange(*params.range)
-    wavelet = pycwt.Morlet(params.omega0)    # Morlet wavelet 生成
+    wavelet = pycwt.Morlet(params.omega0)    # create the Morlet wavelet
     r = pycwt.cwt_f(y, freqs, Fs, wavelet)
     return freqs, np.abs(r)

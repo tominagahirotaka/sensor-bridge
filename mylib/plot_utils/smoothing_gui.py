@@ -19,7 +19,7 @@ from mylib.plot_utils.plotting import plot_timeinterval_histogram
 
 
 class SignalSmoothingWindow(QWidget):
-    execTriggered = pyqtSignal(object)  # データを送るための Signal
+    execTriggered = pyqtSignal(object)  # Signal used to send the data
 
     def __init__(self, plts, data, cpt_list):
         super().__init__()
@@ -40,7 +40,7 @@ class SignalSmoothingWindow(QWidget):
         self.lp_cutoff = [None] * len(self.data)
         self.bn_center = [None] * len(self.data)
         self.bn_q = [None] * len(self.data)
-        # Allタブ用
+        # for the All tab
         self.current_fs_label_all = None
         self.ds_freq_all = None
         self.anti_alias_check_all = None
@@ -58,7 +58,7 @@ class SignalSmoothingWindow(QWidget):
         self.history = {}
         self.history_label = {}
         self.undo_button = {}
-        # メインレイアウト
+        # main layout
         layout = QVBoxLayout()
 
         # Save/Load Button
@@ -74,18 +74,18 @@ class SignalSmoothingWindow(QWidget):
         common_button_layout.addWidget(save_button)
         layout.addLayout(common_button_layout)
 
-        # タブウィジェットの作成
+        # create the tab widget
         idxs = list(range(len(self.data.labels)))
         self.tab_widget = QTabWidget()
 
-        # All Tabを作成
+        # create the All tab
         tab = QWidget()
         self.tab_widget.addTab(tab, f"All")
-        tab_layout = QVBoxLayout()            # タブ内のレイアウト
+        tab_layout = QVBoxLayout()            # layout within the tab
         self.historyAll = []
         # history_label with Undo setting
         history_label_layout = self.create_history_group(idxs)
-        # フィルタ設定
+        # filter settings
         filter_layout = QVBoxLayout()
         tr_group = self.create_trim_group(idxs)          # Trimming
         lp_group = self.create_lowpass_group(idxs)       # Lowpass Filter
@@ -110,19 +110,19 @@ class SignalSmoothingWindow(QWidget):
         tab_layout.addLayout(filter_layout)
         tab.setLayout(tab_layout)
 
-        # 各データに対応するタブを作成
+        # create a tab for each corresponding data series
         for idx, label in enumerate(self.data.labels):
             name, unit = next(iter(label.values()))
             tab = QWidget()
             self.tab_widget.addTab(tab, f"{name}")
-            tab_layout = QVBoxLayout()            # タブ内のレイアウト
+            tab_layout = QVBoxLayout()            # layout within the tab
 
             # Label setting
             self.history[idx] = []
             # history_label with Undo setting
             history_label_layout = self.create_history_group(idx)
 
-            # フィルタ設定
+            # filter settings
             filter_layout = QVBoxLayout()
             tr_group = self.create_trim_group(idx)          # Trimming
             lp_group = self.create_lowpass_group(idx)       # Lowpass Filter
@@ -164,20 +164,20 @@ class SignalSmoothingWindow(QWidget):
         layout = QVBoxLayout()
         param_layout = QHBoxLayout()
 
-        # 新しいサンプリング周波数の設定
+        # set the new sampling frequency
         param_layout.addWidget(QLabel("New Fs (Hz):"))
 
         ds_freq = QSpinBox()
-        current_fs = int(1 / (t[1] - t[0]))  # 現在のサンプリング周波数
+        current_fs = int(1 / (t[1] - t[0]))  # current sampling frequency
         ds_freq.setRange(1, current_fs)
-        ds_freq.setValue(current_fs // 2)  # デフォルト値は現在のFsの半分
+        ds_freq.setValue(current_fs // 2)  # default value is half the current Fs
         param_layout.addWidget(ds_freq)
 
-        # 現在のサンプリング周波数を表示
+        # show the current sampling frequency
         current_fs_label = QLabel(f"Current Fs: {current_fs} Hz")
         param_layout.addWidget(current_fs_label)
 
-        # Anti-aliasing filterのチェックボックス
+        # anti-aliasing filter checkbox
         anti_alias_check = QCheckBox("Anti-aliasing Filter")
         layout.addLayout(param_layout)
         anti_alias_check.setChecked(True)
@@ -205,11 +205,11 @@ class SignalSmoothingWindow(QWidget):
         layout = QVBoxLayout()
 
         tr_reset_t0 = QCheckBox(tr('pu.reset_tmin_to_zero'))
-        tr_reset_t0.setChecked(True)  # デフォルトはON
+        tr_reset_t0.setChecked(True)  # on by default
         layout.addWidget(tr_reset_t0)
 
         if len(self.cpt_list) > 0:
-            # --- Mark 選択 ---
+            # --- Mark selection ---
             cpt_layout = QHBoxLayout()
             cpt_layout.addWidget(QLabel("Mark #"))
 
@@ -220,7 +220,7 @@ class SignalSmoothingWindow(QWidget):
             cpt_val_label = QLabel(f"= {self.cpt_list[0]:.2f} s")
             cpt_layout.addWidget(cpt_val_label)
 
-            # SpinBox 変化時に時刻を表示更新
+            # update the displayed time whenever the SpinBox changes
             cpt_idx.valueChanged.connect(
                 lambda i: cpt_val_label.setText(f"= {self.cpt_list[i]:.2f} s")
             )
@@ -250,13 +250,13 @@ class SignalSmoothingWindow(QWidget):
         param_layout.addWidget(QLabel("t_max (sec):"))
         tr_max = QDoubleSpinBox()
         tr_max.setRange(0, 1000)
-        t_max_val = self.original_data.data[idxs[0]][0][-1]  # t配列の最終要素
+        t_max_val = self.original_data.data[idxs[0]][0][-1]  # the last element of the t array
 
         tr_max.setValue(t_max_val)
         tr_min.setRange(0, t_max_val)
         tr_max.setRange(0, t_max_val)
         tr_min.setValue(0)
-        tr_max.setValue(t_max_val)  # 初期値はデータの最大時刻
+        tr_max.setValue(t_max_val)  # initial value is the data's max time
         param_layout.addWidget(tr_max)
 
         if is_all:
@@ -445,10 +445,10 @@ class SignalSmoothingWindow(QWidget):
                 self.history[idx].append(["DS", [new_fs, is_anti_alias]])
                 if len(idxs) > 1:
                     self.current_fs_label_all.setText(f"Current Fs: {new_fs} Hz")
-                    self.ds_freq_all.setValue(new_fs // 2)  # デフォルト値は現在のFsの半分
+                    self.ds_freq_all.setValue(new_fs // 2)  # default value is half the current Fs
                 else:
                     self.current_fs_label[idxs[0]].setText(f"Current Fs: {new_fs} Hz")
-                    self.ds_freq[idxs[0]].setValue(new_fs // 2)  # デフォルト値は現在のFsの半分
+                    self.ds_freq[idxs[0]].setValue(new_fs // 2)  # default value is half the current Fs
             elif 'moving average' in method:
                 window = self.ma_window_all.value() if len(
                     idxs) > 1 else self.ma_window[idxs[0]].value()
@@ -475,17 +475,17 @@ class SignalSmoothingWindow(QWidget):
                 self.history[idx].append(["TR", [t_min, t_max, tr_reset_t0]])
 
             print(f'Original {self.history=}')
-            # SignalFilter クラスのみ。関数・dictは不要。
+            # Only the SignalFilter class; no function/dict is needed.
             sf = SignalFilter(self.original_data.data[idx])
             self.data.data[idx] = sf.apply(self.history[idx]).data
             # self.data.data[idx] = cont_calc_filters(self.original_data.data[idx], self.history[idx])
             txt = tr('pu.history_prefix') + \
                 '+'.join(set_bg_color(f'{method}{param}') for method, param in self.history[idx])
             self.history_label[idx].setText(txt)
-            # プロットの更新
+            # update the plot
             self.update_plot(idx)
 
-        # Allタブの履歴ラベルも更新
+        # also update the All tab's history label
         if is_all and 'all' in self.history_label:
             self.history_label['all'].setText(txt)
 
@@ -510,18 +510,18 @@ class SignalSmoothingWindow(QWidget):
             if num_history == 0:
                 continue
             del self.history[idx][-1]
-            self.apply_history(idx)  # 履歴が空になった場合もapply_historyが元データへ戻す
+            self.apply_history(idx)  # apply_history also reverts to the original data when the history becomes empty
 
-        # ループ後にAllタブのラベルを最新状態に更新
+        # after the loop, bring the All tab's label up to date
         if is_all and 'all' in self.history_label:
-            # idxs[0]の履歴が残っているかで判断
+            # decide based on whether idxs[0]'s history is still non-empty
             if len(self.history[idxs[0]]) > 0:
                 txt = tr('pu.history_prefix') + \
                     '+'.join(set_bg_color(f'{m}{p}') for m, p in self.history[idxs[0]])
                 self.history_label['all'].setText(txt)
             else:
                 self.history_label['all'].setText(tr('pu.history_prefix'))
-                # Allタブに対応するfiltered_plotも非表示
+                # also hide the filtered_plot corresponding to the All tab
                 for idx in idxs:
                     self.filtered_plot[idx].hide()
 
@@ -529,9 +529,11 @@ class SignalSmoothingWindow(QWidget):
         idxs = [idxs] if isinstance(idxs, int) else idxs
         for idx in idxs:
             if len(self.history[idx]) == 0:
-                # 履歴が空なのにself.dataが直前のフィルタ結果のまま残ると、「history=[]な
-                # のにdataはフィルタ済み」という矛盾が生じる(Undoで最後の1件を消した直後や、
-                # 空historyのLoadで再現する)。元データへ戻し、表示も揃える。
+                # If self.data stayed at the last filtered result while the
+                # history is empty, that's a contradiction ("history=[] but
+                # data is still filtered") -- reproducible right after Undo
+                # removes the last entry, or after Load with an empty
+                # history. Revert to the original data and keep the display consistent.
                 self.data.data[idx] = self.original_data.data[idx]
                 self.history_label[idx].setText(tr('pu.history_prefix'))
                 if self.filtered_plot[idx]:
@@ -567,9 +569,11 @@ class SignalSmoothingWindow(QWidget):
             self.apply_history(idx)
 
 
-# LIS3DH(加速度センサー)のRegister Codeそのままでは意味が分からないため、Header Viewerでの
-# 表示用に人が読める値を対応付ける。odr/fs はLIS3DH.ini、odr1/odr2/fs1/fs2は2台のLIS3DHを
-# 積んだDPG_X95840W_LIS3DHx2.iniが使うKey名(どちらも同じLIS3DHのRegister値)。
+# The LIS3DH (accelerometer) register codes are not meaningful on their own,
+# so map them to human-readable values for display in the Header Viewer.
+# odr/fs are used by LIS3DH.ini; odr1/odr2/fs1/fs2 are the key names used by
+# DPG_X95840W_LIS3DHx2.ini, which carries two LIS3DHs (both are the same
+# LIS3DH register values).
 _LIS3DH_ODR_LABELS = {
     '1': '1Hz', '2': '10Hz', '3': '25Hz', '4': '50Hz', '5': '100Hz',
     '6': '200Hz', '7': '400Hz', '8': '1.6kHz(LP only)', '9': '1.344kHz/5.376kHz(LP)',
@@ -583,7 +587,7 @@ _LIS3DH_KEY_LABELS = {
 
 
 def _describe_env_set_key(key):
-    """odr/fs系のKeyは何の略かをそのまま併記する。それ以外はstr(key)のまま。"""
+    """For odr/fs-family keys, append what they're short for. Otherwise, just str(key)."""
     text = str(key)
     if text in _LIS3DH_KEY_LABELS:
         return f'{text} = {_LIS3DH_KEY_LABELS[text]}'
@@ -591,7 +595,8 @@ def _describe_env_set_key(key):
 
 
 def _describe_env_set_value(key, value):
-    """odr/fs系のKeyはRegister Codeの横に人が読める説明を括弧書きで加える。それ以外はstr(value)のまま。"""
+    """For odr/fs-family keys, append a human-readable description in
+    parentheses next to the register code. Otherwise, just str(value)."""
     text = str(value)
     if key in ('odr', 'odr1', 'odr2') and text in _LIS3DH_ODR_LABELS:
         return f'{text} ({_LIS3DH_ODR_LABELS[text]})'
@@ -601,18 +606,18 @@ def _describe_env_set_value(key, value):
 
 
 class TabWindow(QDialog):
-    """タブウィジェットを表示する別ウィンドウ"""
+    """Separate window displaying the tab widget"""
 
     def __init__(self, header, data0):
         super().__init__()
         self.setWindowTitle("Header Viewer - Tabs")
         self.resize(800, 900)
-        # メインレイアウト
+        # main layout
         self.layout = QVBoxLayout(self)
-        # タブウィジェット
+        # tab widget
         self.tab_widget = QTabWidget()
         self.layout.addWidget(self.tab_widget)
-        # ヘッダーデータの読み込み
+        # load the header data
         self.header = header
         self.load_header_data()
         # Timeinterval Histogram
@@ -622,16 +627,16 @@ class TabWindow(QDialog):
         self.tab_widget.addTab(win, 'timeinterval histogram')
 
     def load_header_data(self):
-        """self.headerのデータを読み取ってタブを作成"""
+        """Read self.header's data and create the tabs"""
         current_index = -1
         for idx, (sheet, dic) in enumerate(self.header.__dict__.items()):
             if sheet == 'subject':
                 current_index = idx
-            # タブに追加
+            # add the tab
             table_widget = QTableWidget()
             self.tab_widget.addTab(table_widget, sheet)
 
-            # データをテーブルに表示
+            # display the data in the table
             if sheet == "machine" and not isinstance(dic, dict):
                 table_widget.setRowCount(1)
                 table_widget.setColumnCount(1)
@@ -643,22 +648,22 @@ class TabWindow(QDialog):
             self.tab_widget.setCurrentIndex(current_index)
 
     def display_dict_data(self, dic, table_widget):
-        """辞書型データをテーブルに表示"""
+        """Display dict-type data in the table"""
         rows = len(dic)
         table_widget.setRowCount(rows)
-        table_widget.setColumnCount(2)  # キーと値の2列
+        table_widget.setColumnCount(2)  # 2 columns: key and value
 
         for row_idx, (key, lst) in enumerate(dic.items()):
-            table_widget.setItem(row_idx, 0, QTableWidgetItem(_describe_env_set_key(key)))  # 例: odr -> 'odr = Output Data Rate'
+            table_widget.setItem(row_idx, 0, QTableWidgetItem(_describe_env_set_key(key)))  # e.g. odr -> 'odr = Output Data Rate'
 
-            # lst がリストかどうか確認
+            # check whether lst is a list
             if isinstance(lst, list):
-                value = ", ".join(map(str, lst))  # リストの場合は結合して表示
+                value = ", ".join(map(str, lst))  # if it's a list, join and display it
             else:
-                value = _describe_env_set_value(key, lst)  # 例: odr='7' -> '7 (400Hz)'
+                value = _describe_env_set_value(key, lst)  # e.g. odr='7' -> '7 (400Hz)'
             table_widget.setItem(row_idx, 1, QTableWidgetItem(value))
 
 #
-# 変換系関数
+# conversion-related functions
 #
 #

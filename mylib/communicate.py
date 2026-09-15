@@ -15,10 +15,11 @@ import numpy as np
 import serial.tools.list_ports
 
 try:
-    # termiosはPOSIX専用。切断済みシリアルデバイスに対する
-    # ser.reset_output_buffer()等がserial.SerialExceptionではなく
-    # termios.error(Exceptionのサブクラスで、OSErrorではない)を投げることがあるため、
-    # 個別に捕捉できるよう用意する。Windowsではモジュール自体が存在しないため空にする。
+    # termios is POSIX-only. Against an already-disconnected serial device,
+    # calls like ser.reset_output_buffer() can raise termios.error (a direct
+    # subclass of Exception, not OSError) instead of serial.SerialException,
+    # so it needs to be caught separately. On Windows the module itself
+    # doesn't exist, so this is left empty there.
     import termios
     _TERMIOS_ERRORS = (termios.error,)
 except ImportError:
@@ -50,12 +51,12 @@ class Header:
         self.board = {}
         self.subject = {}
         self.time = {}
-        self.machine = platform.uname()._asdict()                 # PC情報取得
+        self.machine = platform.uname()._asdict()                 # Get PC info
 
 
 class ReceiveCommon:
     def __init__(self, args, board):
-        self.p = Header()                 # Instance of Header class (保存ファイルの先頭に情報を書き込む為のObject)
+        self.p = Header()                 # Instance of Header class (object holding the info written at the start of the saved file)
         self.init_flag, self.write_flag = False, False        # set flags
         self.p.board['device'] = board
         self.board = Board(self.p, args, True)        # Instance of Board class
@@ -63,17 +64,19 @@ class ReceiveCommon:
         board_program = self.board.open_serial()      # open serial & get board_program name
         ini_path = i18n.resolve_localized_path(
             board_program + '.ini')  # `_jp.ini` sibling when --lang ja
-        if os.path.isfile(ini_path):                  # 測定環境情報取得
+        if os.path.isfile(ini_path):                  # Get measurement environment info
             self.p.env_set, self.code = utils.read_setting_ini(ini_path)
         else:
             print(t('comm.ini_missing_use_default', ini=board_program + '.ini'))
             self.p.env_set, self.code = utils.read_setting_ini(
                 i18n.resolve_localized_path('default.ini'))
         if args.init is not None:
-            # configparser.read()は指定ファイルが存在しなくても例外を出さず黙って何も
-            # 読まない(空dict)ため、拡張子.iniを付け忘れると-i自体が無言で無効化される
-            # (例: -i DPG_X95840Wpeak と打つとDPG_X95840Wpeak.iniではなく存在しない
-            #  'DPG_X95840Wpeak'を探しに行き、何も上書きされないまま起動してしまう)。
+            # configparser.read() silently reads nothing (an empty dict)
+            # instead of raising when the given file doesn't exist, so
+            # forgetting the .ini extension silently disables -i entirely
+            # (e.g. `-i DPG_X95840Wpeak` looks for a nonexistent
+            # 'DPG_X95840Wpeak' instead of 'DPG_X95840Wpeak.ini', and the
+            # program starts with nothing overridden).
             init_path = args.init if os.path.isfile(args.init) else i18n.resolve_localized_path(
                 args.init if args.init.endswith('.ini') else args.init + '.ini')
             if os.path.isfile(init_path):
@@ -96,23 +99,23 @@ class ReceiveCommon:
         self.board.init_serial(b'i')
         print(f'[INFO] {self.p.env_set=}')
 
-    # USB読み込み専用thread開始
+    # Start the USB-read-only thread
     def start_read_thread(self):
         if self.write_flag:
             self.file = FIO.FileIO()            # instance of fileIO class
-            self.file.write_open(self.p)        # dataファイルopen(書き出し)
+            self.file.write_open(self.p)        # open the data file (for writing)
             self.th = threading.Thread(
                 target=self.board.get_data_and_write, args=(
-                    self.file.fwrite,))  # Thread設定
+                    self.file.fwrite,))  # set up the thread
         else:
             print(t('comm.not_writing'))
-            self.th = threading.Thread(target=self.board.get_data_no_write)  # Thread設定
-        # Thread開始
+            self.th = threading.Thread(target=self.board.get_data_no_write)  # set up the thread
+        # Start the thread
         self.th.setDaemon(True)
         self.th.start()
-        # Thread開始時点での時刻を取得
+        # Record the time the thread started
         self.p.time['th_start_time'] = datetime.datetime.now()
-        # data stream(update関数が,この関数内yield文により順にデータを取得する)
+        # Data stream (the update function fetches data in turn via this function's yield statement)
         self.stream = self.board.data_stream()
 
     def check_points(self):
@@ -127,18 +130,18 @@ class Receive(ReceiveCommon):
     def __init__(self, args, board):
         super().__init__(args, board)
 
-    # 測定開始(Qt)
+    # Start measurement (Qt)
     def start_running(self, marker):
-        # USB 接続, Command送出し、戻ってきたParameterを設定
+        # Connect over USB, send the command, and apply the returned parameters
         # b"s"... start or test, b"c"... calibration
         self.board.connect_serial(marker)
         self.board.ser.read_until(b'OK\r\n')                 # Flush until OK\r\n
-        self.p.time['start_time'] = datetime.datetime.now()  # 測定開始時間取得
+        self.p.time['start_time'] = datetime.datetime.now()  # Record the measurement start time
         self.start_read_thread()                             # Start thread
 
     # Send b'r' (Stop) to Board
     def stop_running(self):
-        self.board.connect_serial(b'r')                      # USB 接続, Command b'r' (Stop)
+        self.board.connect_serial(b'r')                      # Connect over USB, command b'r' (Stop)
 
     # setting informations from subject window to self.p
     def set_subject_info(self, subject):
@@ -165,7 +168,7 @@ def search_connected_boards():
         ans = input(t('comm.prompt_connect_usb'))
         if ans:
             break
-    return [list(usb) for usb in list(dict.fromkeys(boards))]   # ダブりを削除
+    return [list(usb) for usb in list(dict.fromkeys(boards))]   # remove duplicates
 
 
 class Board:
@@ -179,16 +182,16 @@ class Board:
             self.ser = serial.Serial(None, timeout=16, write_timeout=16)
             self.ser.baudrate = self.p.board['baudrate']
             self.ser.port = self.p.board['device'][0]
-            self.ser_data = None          # 明示的にNoneで初期化
+            self.ser_data = None          # explicitly initialize to None
             self._data_ready = threading.Event()
             self._new_data_event = threading.Event()
 
             print(f'[INFO] {self.ser.port=}')
 
     def _build_struct(self):
-        """structureからstruct.Structを事前コンパイル"""
-        # self.endianの実際の値を確認
-        # 'little' → '<', 'big' → '>'
+        """Pre-compile a struct.Struct from `structure`."""
+        # Check the actual value of self.endian
+        # 'little' -> '<', 'big' -> '>'
         endian_map = {'little': '<', 'big': '>'}
         fmt = endian_map['little']
         fmt_map = {
@@ -207,7 +210,7 @@ class Board:
             fmt += fmt_map[size]
             self._offsets.append((start, end))
             self._sizes.append(size)
-            self._func_list.append(self.func[st[2]][0])  # 関数を直接リストに
+            self._func_list.append(self.func[st[2]][0])  # add the function directly to the list
 
         self._struct = struct.Struct(fmt)
         self._total_size = self._struct.size
@@ -248,7 +251,7 @@ class Board:
 
     def _waiting(self, ch):
         while not self.ser.inWaiting() > 0:
-            time.sleep(0.001)  # 1ms 待ってCPU解放
+            time.sleep(0.001)  # wait 1ms to free up the CPU
 
         u_atmark = self.ser.read_until(b'@@')              # Flush buffer until @@
         debug_print(self.args, f'{u_atmark=}')
@@ -268,11 +271,12 @@ class Board:
         self.ser.reset_input_buffer()
         if marker == b'r':
             return
-        # boardからの応答を待つ
+        # Wait for the board's response
         board_params = self._waiting('setparams')
-        # 値自体に'='を含む場合(LIS3DHのfuncのx>=32768等)があるため、最初の'='でのみ分割する。
+        # Some values themselves contain '=' (e.g. LIS3DH's func `x>=32768`),
+        # so split on only the first '='.
         self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
-        # boardから受け取った変数を self. 変数に加工
+        # Turn the variables received from the board into self.<name> attributes
         self.set_self_vars()
         self._build_struct()
 
@@ -280,7 +284,7 @@ class Board:
         print(t('comm.open_serial'))
         # serial port OPEN
         self.ser.open()
-        # boardからの応答を待つ Obtain 'board_program' Name
+        # Wait for the board's response, obtain the 'board_program' name
         flag = self._waiting('board_program')
         self.ser.reset_output_buffer()
         self.ser.reset_input_buffer()
@@ -306,12 +310,13 @@ class Board:
         print(f'[INFO] {pc_params=}')
         self.ser.write(marker)     # b"i"... initialize, b"a" ... ReInitialize (Again)
         self.ser.write(bytes(pc_params, encoding="utf-8"))
-        # boardからの応答を待つ 'setparams'
+        # Wait for the board's 'setparams' response
         board_params = self._waiting('setparams')
         print(f'[INFO] {board_params=}')
-        # 値自体に'='を含む場合(LIS3DHのfuncのx>=32768等)があるため、最初の'='でのみ分割する。
+        # Some values themselves contain '=' (e.g. LIS3DH's func `x>=32768`),
+        # so split on only the first '='.
         self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
-        # boardから受け取った変数を self. 変数に加工
+        # Turn the variables received from the board into self.<name> attributes
         self.set_self_vars()
         self._build_struct()
 
@@ -321,20 +326,23 @@ class Board:
             try:
                 self.ser_data = self.ser.read(self.one_data_size)
             except serial.SerialException as exc:
-                # USB切断・瞬断等。Threadをクラッシュさせず、Stop相当の後処理へ進む。
+                # USB disconnect, a brief dropout, etc. Don't crash the
+                # thread; proceed to Stop-equivalent cleanup instead.
                 print(t('comm.thread_serial_error', err=exc))
                 self.loop_th = False
                 break
-            self._data_ready.set()      # 初回待機解除用
-            self._new_data_event.set()  # 新データ到着を通知
+            self._data_ready.set()      # to release the initial wait
+            self._new_data_event.set()  # notify that new data has arrived
         try:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
             self.ser.write(b"r")
         except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
-            # デバイスが物理的に切断済みだと、reset_output_buffer()内のtermios.tcflush()が
-            # serial.SerialExceptionでもOSErrorでもないtermios.error(Exception直下)を
-            # 投げてくることがあり、それを取り逃すとThreadが未捕捉例外でクラッシュしてしまう。
+            # If the device has been physically disconnected,
+            # termios.tcflush() inside reset_output_buffer() can raise
+            # termios.error (a direct subclass of Exception, neither
+            # serial.SerialException nor OSError); missing it would crash
+            # the thread with an uncaught exception.
             pass
         print(t('comm.thread_no_write_stopped'))
 
@@ -347,24 +355,26 @@ class Board:
                 self.loop_th = False
                 break
             self._data_ready.set()
-            self._new_data_event.set()  # 新データ到着を通知
+            self._new_data_event.set()  # notify that new data has arrived
             f.write(self.ser_data)
         try:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
             self.ser.write(b"r")
         except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
-            # デバイスが物理的に切断済みだと、reset_output_buffer()内のtermios.tcflush()が
-            # serial.SerialExceptionでもOSErrorでもないtermios.error(Exception直下)を
-            # 投げてくることがあり、それを取り逃すとThreadが未捕捉例外でクラッシュしてしまう。
+            # If the device has been physically disconnected,
+            # termios.tcflush() inside reset_output_buffer() can raise
+            # termios.error (a direct subclass of Exception, neither
+            # serial.SerialException nor OSError); missing it would crash
+            # the thread with an uncaught exception.
             pass
         print(t('comm.thread_write_stopped'))
 
     def convert(self, s):
-        # struct.unpack_fromで一括デコード（Cレベル、高速）
+        # Decode in one shot with struct.unpack_from (C-level, fast)
         raw = self._struct.unpack_from(s)
 
-        # 変換関数を事前リストから直接呼ぶ
+        # Call the conversion functions directly from the precomputed list
         fun = [f(v) for f, v in zip(self._func_list, raw)]
         out = np.empty(len(fun) + len(raw), dtype=np.float64)
         out[:len(fun)] = fun
@@ -378,9 +388,9 @@ class Board:
         init_val[0][0] = init_val[0][len(self.structure)] = 0
         self.data = np.full((2, len(self.structure) * 2), init_val)
         while True:
-            # ポーリングの代わりにEventで待機
+            # Wait on an Event instead of polling
             self._new_data_event.wait()
-            self._new_data_event.clear()  # 次のデータまでブロック
+            self._new_data_event.clear()  # block until the next data
             if self.ser_data != ser_data0:
                 ser_data0 = self.ser_data
                 self.data[0] = self.data[1]

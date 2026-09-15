@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-sensor-bridge: グラフ表示モジュール
-取得したセンサーデータをリアルタイムで表示する
+sensor-bridge: graph display module
+Displays acquired sensor data in real time.
 """
 
 import argparse
@@ -27,7 +27,7 @@ import mylib.i18n as i18n
 import mylib.plot_utils as pltutils
 from mylib.debug_utils import debug_print
 from mylib.i18n import t
-from mylib.plot_utils import WaveletParams  # 必要に応じてインポート
+from mylib.plot_utils import WaveletParams  # import as needed
 from version import __version__
 
 
@@ -46,30 +46,33 @@ def parse_filter_string(filter_str):
     for item in filter_str.split(','):
         if '[' in item and item.endswith(']'):
             name, args = item.split('[', 1)
-            args = ast.literal_eval(f"[{args}")  # 安全にリストとして評価
+            args = ast.literal_eval(f"[{args}")  # safely evaluate as a list
             history.append([name.strip(), args])
     return history
 
 
 def merge_filter_and_history(filter_dict, history_dict):
-    """defaultのFilterとSignalSmoothingWindowでの操作Historyを1つのdictへ合成する
-    （同じKeyはFilterが先、Historyが後の順で連結）。"""
+    """Merge the default Filter and the SignalSmoothingWindow's operation
+    History into a single dict (for the same key, Filter entries come
+    first, followed by History entries)."""
     merged = {}
     all_keys = list(dict.fromkeys(list(filter_dict.keys()) + list(history_dict.keys())))
     for key in all_keys:
         merged[key] = []
         if key in filter_dict:
-            merged[key].extend(filter_dict[key])  # filterが先
+            merged[key].extend(filter_dict[key])  # filter comes first
         if key in history_dict:
-            merged[key].extend(history_dict[key])  # historyが後
+            merged[key].extend(history_dict[key])  # history comes after
     return merged
 
 
 graph_type = [
-    # tooltip欄はi18nカタログのkey。setToolTip側でt()を呼ぶ（--lang解決前にこのリストが
-    # 評価されるため、ここで直接t()すると常に起動時点の言語になってしまう）。
+    # The tooltip field is an i18n catalog key; t() is called on the
+    # setToolTip side (since this list is evaluated before --lang is
+    # resolved, calling t() directly here would always freeze it to the
+    # language at startup).
     ('Timeseries', lambda obj: obj.current_data, ['plot'], 'plot.tt.timeseries'),
-    # 'freq': X軸がTimeではなくFreq.(Hz)。Mark/Shift time等のTime系操作は無関係。
+    # 'freq': the X axis is Freq.(Hz), not Time. Time-based operations like Mark/Shift time don't apply.
     ('PowerSpectra', lambda obj: obj.ps_data, ['plot', 'freq'], 'plot.tt.powerspectra'),
     ('Scalogram', lambda obj: obj.wv_data, ['image', 'wavelet'],
      'plot.tt.scalogram'),
@@ -106,11 +109,11 @@ def decompose_graph_type(graph_type):
     name = [f"{k}:{name}" for k, (name, _, _, _) in enumerate(graph_type)]
     func = {k: func for k, (_, func, _, _) in enumerate(graph_type)}
     tooltip = {f"{k}:{name}": tp for k, (name, _, _, tp) in enumerate(graph_type)}
-    # 'image' を含む index を取得
+    # get the indices that include 'image'
     image = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'image' in modes]
-    # 'wavelet' を含む index を取得
+    # get the indices that include 'wavelet'
     wavelet = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'wavelet' in modes]
-    # 'freq' (X軸がTimeでない) を含む index を取得
+    # get the indices that include 'freq' (X axis is not Time)
     freq = [k for k, (_, _, modes, _) in enumerate(graph_type) if 'freq' in modes]
     return (name, func, image, wavelet, freq, tooltip)
 
@@ -125,8 +128,9 @@ graph_lst['LIS3DH'] = ['Timeseries', 'PowerSpectra', 'Scalogram']
 
 
 def resolve_graph_visibility(board_prog, graph_lst, graph_name):
-    """board_prog(Boardのtitle)に対応するgraph_lstのEntryを探し、graph_nameの各要素が
-    そのBoardで表示可能かどうかのBoolean Listを返す（該当Entryが無ければ全てTrue）。"""
+    """Find the graph_lst entry matching board_prog (the board's title), and
+    return a Boolean list of whether each element of graph_name is
+    displayable for that board (all True if no matching entry exists)."""
     matched_key = next((k for k in graph_lst if k in board_prog), None)
     if matched_key is None:
         return [True] * len(graph_name)
@@ -139,19 +143,19 @@ class MainWindow(QMainWindow):
         self.args = args
         self.initUI(args)
         if filename:
-            self.prepare_data(filename)  # Data 読み込み
+            self.prepare_data(filename)  # load the data
             self.variable_parts()
         else:
             self.num_plots = 1
             self.dirname = default_dir
 
-        # label,plots,p_base(win内配置)
+        # label, plots, p_base (placed within win)
         self.plots = pltutils.InitPlots(self.win, self.num_plots)
         if filename:
             self.update_plot()
 
     def initUI(self, args):
-        # メインウィジェットとレイアウト作成
+        # create the main widget and layout
         main_widget = QWidget()
         layout = QVBoxLayout()
         main_widget.setLayout(layout)
@@ -167,43 +171,43 @@ class MainWindow(QMainWindow):
         self.label2 = QLabel('')
         self.label3 = QLabel('')
 
-        # ファイル選択ボタン
+        # file selection button
         self.file_selection_button = QPushButton(t('plot.gui.open_file'))
         self.file_selection_button.setToolTip(t('plot.gui.open_file_tip'))
         self.file_selection_button.clicked.connect(self.open_file_select_dialog)
 
-        # Write ボタン
+        # Write button
         self.file_write_button = QPushButton(t('plot.gui.save_graph'))
         self.file_write_button.setToolTip(t('plot.gui.save_graph_tip'))
         self.file_write_button.clicked.connect(self.open_file_write_dialog)
 
-        # Signal Smoothingボタン
-        self.smoothing_window = None   # Smoothing windowを保持する変数
+        # Signal Smoothing button
+        self.smoothing_window = None   # variable holding the smoothing window
         self.smoothing_button = QPushButton(t('plot.gui.smoothing'))
         self.smoothing_button.setToolTip(t('plot.gui.smoothing_tip'))
         self.smoothing_button.clicked.connect(self.open_smoothing_window)
 
-        # Graph選択ボタン
+        # Graph selection button
         self.graph_actions = {}
         self.graph_sel_button = QPushButton(t('plot.gui.select_graph'), self)
         self.graph_sel_button.setToolTip(t('plot.gui.select_graph_tip'))
-        self.graph_sel_menu = QMenu(self)        # メニューを作成
+        self.graph_sel_menu = QMenu(self)        # create the menu
         self.graph_sel_menu.setToolTipsVisible(True)
         for name in graph_name:
             self.graph_actions[name] = self.graph_sel_menu.addAction(f'{name}', self.select_graph)
             self.graph_actions[name].setToolTip(t(graph_tooltip[name]))
-        self.graph_sel_button.setMenu(self.graph_sel_menu)  # ボタンにメニューを設定
+        self.graph_sel_button.setMenu(self.graph_sel_menu)  # attach the menu to the button
 
         # INFO button
-        self.info_window = None     # Information windowを保持する変数
+        self.info_window = None     # variable holding the Information window
         self.info_button = QPushButton(t('plot.gui.info'))
         self.info_button.setToolTip(t('plot.gui.info_tip'))
         self.info_button.clicked.connect(self.open_info_window)
 
-        # Full Range button（最下段の選択範囲を全範囲<->直前の範囲でトグル）
+        # Full Range button (toggles the bottom row's selected range between full range <-> the previous range)
         self.full_range_button = QPushButton(t('plot.gui.full_range'))
         self.full_range_button.setToolTip(t('plot.gui.full_range_tip'))
-        self.full_range_button.setCheckable(True)  # 全範囲表示中はBackground色を変えて視認性を上げる
+        self.full_range_button.setCheckable(True)  # change the background color while full-range display is active, for visibility
         self.full_range_button.setStyleSheet(
             "QPushButton:checked { background-color: #ffca28; }")
         self.full_range_button.clicked.connect(self.toggle_full_range)
@@ -216,13 +220,13 @@ class MainWindow(QMainWindow):
         # Port selection (GroupBox & checkbox)
         self.port_selection = QGroupBox(t('plot.gui.select_port'))
 
-        # Peaks描画
+        # Peaks display
         self.peaks_check = QCheckBox('Peak')
         self.peaks_check.setToolTip(t('plot.gui.peak_tip'))
         if self.args.peaks:
             self.peaks_check.setChecked(True)
 
-        # Mark(checkpoint)描画
+        # Mark (checkpoint) display
         self.mark_check = QCheckBox(t('plot.gui.mark_check'))
         self.mark_check.setToolTip(t('plot.gui.mark_tip'))
         if self.args.vline:
@@ -238,7 +242,7 @@ class MainWindow(QMainWindow):
         self.derivatives = QGroupBox(t('plot.gui.derivatives'))
         self.derivatives.setToolTip(t('plot.gui.derivatives_tip'))
         if self.derivatives.layout():
-            QWidget().setLayout(self.derivatives.layout())  # 既存の設定を削除
+            QWidget().setLayout(self.derivatives.layout())  # remove the existing layout
         derivatives_layout, self.derivatives_checkboxes = pltutils.mk_checkbox(
             ['1st', '2nd'], self.hide_show_plot, isChecked=False)
         self.derivatives.setLayout(derivatives_layout)
@@ -272,8 +276,8 @@ class MainWindow(QMainWindow):
             self.PRE_check.setChecked(True)
         self.PRE_check.stateChanged.connect(self.hide_show_plot)
 
-        # コントロールレイアウトを追加
-        # row(行), column(列), rowspan(行方向セル数), colspan(列方向セル数)
+        # add the control layout
+        # row, column, rowspan (number of cells vertically), colspan (number of cells horizontally)
         widgets = [
             (self.title_label, 0, 0, 1, 7),
             (self.file_selection_button, 1, 0),
@@ -299,17 +303,17 @@ class MainWindow(QMainWindow):
             self.control_layout.addWidget(*wid)
         layout.addLayout(self.control_layout)
 
-        # グラフウィジェット作成
+        # create the graph widget
         _, self.win = pltutils.init_pg('')
         layout.addWidget(self.win)
 
-        if self.args.fullscreen:        # ウィンドウをフルスクリーンに
+        if self.args.fullscreen:        # make the window fullscreen
             self.showFullScreen()
         else:
-            self.resize(2048, 1600)  # ウィンドウサイズ設定
-            self.move(200, 200)  # ウィンドウ位置設定
+            self.resize(2048, 1600)  # set the window size
+            self.move(200, 200)  # set the window position
 
-        self.win.clear()         # 既存のグラフをクリア
+        self.win.clear()         # clear the existing graph
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Q and event.modifiers() & Qt.ControlModifier:
@@ -326,11 +330,11 @@ class MainWindow(QMainWindow):
             self.graph_sel_button.showMenu()
 
     def prepare_data(self, filename):
-        self.basename = os.path.basename(filename)  # ファイル名のみ取得
+        self.basename = os.path.basename(filename)  # get just the filename
         self.dirname = os.path.dirname(filename)
         self.fname, _ = os.path.splitext(filename)
         self.args.filename = filename
-        self.data = pltutils.ReadData(self.args)    # data読込み
+        self.data = pltutils.ReadData(self.args)    # load the data
         self.board_prog = self.data.header.__dict__['env_set']['title']
 
         result = resolve_graph_visibility(self.board_prog, graph_lst, graph_name)
@@ -339,7 +343,7 @@ class MainWindow(QMainWindow):
 
         self.cpt_list = self.data.cpt_list
         self.current_data = copy.deepcopy(self.data.data0)   # original PlotData
-        # 前もってfilter(default:'default_filter.json'->ex. LowPass filter & DownSampling)
+        # apply the default filter up front (default: 'default_filter.json' -> e.g. LowPass filter & DownSampling)
         self.filter, self.current_data.data = pltutils.apply_default_filters(
             self.current_data.data, default_filter if self.args.smoothing else None, self.cpt_list)
 
@@ -352,7 +356,7 @@ class MainWindow(QMainWindow):
                 pltutils.save_header(self.data.header, headerfile)
 
         self.wl_params = build_wavelet_params(self.args)
-        # 非同期でwavelet計算
+        # compute the wavelet transform asynchronously
         executor = ProcessPoolExecutor()
         self.future = executor.submit(
             pltutils.do_wavelet_transform,
@@ -368,14 +372,14 @@ class MainWindow(QMainWindow):
 
         self.selected_graph = f'{graph_name[int(self.args.graph)]}'
         self.time_offset = 0
-        self.add_shift = 0  # 数値を格納する変数
+        self.add_shift = 0  # variable holding a numeric value
         self.window_title = f'{self.basename}   {self.data.title}'  # Window Title setting
         self.setWindowTitle(self.window_title)
 
     def variable_parts(self):
         # Port Selection
         if self.port_selection.layout():
-            QWidget().setLayout(self.port_selection.layout())  # 既存の設定を削除
+            QWidget().setLayout(self.port_selection.layout())  # remove the existing layout
         if self.num_plots > 1:   # For only 1port -> hide
             checkboxes_layout, self.checkboxes = pltutils.mk_checkbox(
                 range(self.num_plots), self.hide_show_plot)
@@ -386,7 +390,7 @@ class MainWindow(QMainWindow):
 
         # Check points Selection(For time shift)
         if self.time_shift.layout():
-            QWidget().setLayout(self.time_shift.layout())  # 既存の設定を削除
+            QWidget().setLayout(self.time_shift.layout())  # remove the existing layout
         if len(self.data.cpt_list) > 0:
             sel = 1 if self.args.timeshift1 else 0
             radiobuttons_layout, self.button_group = pltutils.mk_radiobuttons(
@@ -405,10 +409,10 @@ class MainWindow(QMainWindow):
         self.PRE_check.setVisible(bool(self.data.PRE_dict))
 
         # Information window
-        if self.info_window:                # Information Windowが開いていれば
-            self.info_window.close()    # Windowを閉じる
-            self.info_window = None   # 参照を削除
-            self.open_info_window()    # Windowを開く
+        if self.info_window:                # if the Information window is open
+            self.info_window.close()    # close the window
+            self.info_window = None   # drop the reference
+            self.open_info_window()    # open the window
 
     def open_smoothing_window(self):
         if not self.smoothing_window:
@@ -416,9 +420,9 @@ class MainWindow(QMainWindow):
             print(f'{self.cpt_list=}, {len(self.cpt_list)=}')
             self.smoothing_window = pltutils.SignalSmoothingWindow(
                 self.plots.plts, self.changed_data, self.cpt_list)
-            # Signal を connect（データ取得）
+            # connect the Signal (to receive the data)
             self.smoothing_window.execTriggered.connect(self.on_smoothing_finished)
-            # ウィンドウを閉じたときに参照を削除
+            # drop the reference when the window is closed
             self.smoothing_window.setAttribute(Qt.WA_DeleteOnClose)
             self.smoothing_window.destroyed.connect(
                 lambda: setattr(self, "smoothing_window", None))
@@ -426,13 +430,13 @@ class MainWindow(QMainWindow):
 
     def on_smoothing_finished(self, data):
         print(t('plot.exec_received_data'), f"{data['history']=}")
-        self.current_data = copy.deepcopy(data['filtered'])  # 取得したデータで更新
+        self.current_data = copy.deepcopy(data['filtered'])  # update with the received data
         self.history = data['history']  # Get filter history
         self.filter = self.merge_filter_and_history()  # merge
 
         self.selected_graph = '0:Timeseries'
         self.update_plot()
-        # 非同期でwavelet計算
+        # compute the wavelet transform asynchronously
         executor = ProcessPoolExecutor()
         self.future = executor.submit(
             pltutils.do_wavelet_transform,
@@ -440,23 +444,23 @@ class MainWindow(QMainWindow):
             self.wl_params)
 
     def open_info_window(self):
-        """別ウィンドウを開き、閉じたときに参照を削除"""
+        """Open a separate window, and drop the reference when it's closed"""
         if self.info_window is None:
             self.info_window = pltutils.TabWindow(
                 self.data.header, self.current_data)  # self.data.data0)
-            # ウィンドウを閉じたときに参照を削除
+            # drop the reference when the window is closed
             self.info_window.setAttribute(Qt.WA_DeleteOnClose)
             self.info_window.destroyed.connect(lambda: setattr(self, "info_window", None))
             self.info_window.show()
 
     def closeEvent(self, event):
-        # InfoWindowを閉じる
+        # close the InfoWindow
         if self.info_window and self.info_window.isVisible():
             self.info_window.close()
-        # SignalSmoothingWindowを閉じる
+        # close the SignalSmoothingWindow
         if self.smoothing_window and self.smoothing_window.isVisible():
             self.smoothing_window.close()
-        # MainWindowを閉じる
+        # close the MainWindow
         event.accept()
 
     def closeApp(self):
@@ -464,53 +468,56 @@ class MainWindow(QMainWindow):
 
     def open_file_select_dialog(self):
         options = QFileDialog.Options()  # options |= QFileDialog.DontUseNativeDialog
-        # ファイル選択ダイアログを開く
+        # open the file selection dialog
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select .dat File", self.dirname, "DAT Files (*.dat)", options=options)
         if file_path:
             print(t('plot.selected_file', path=file_path))
             self.prepare_data(file_path)
             self.variable_parts()
-            self.win.clear()      # 既存のグラフをクリア
-            self.plots.remove_right_axes()  # plts_right 削除
+            self.win.clear()      # clear the existing graph
+            self.plots.remove_right_axes()  # remove plts_right
             self.plots = pltutils.InitPlots(
-                self.win, self.num_plots)  # label, plots, p_base(win内配置)
-            self.update_plot()    # プロット更新
+                self.win, self.num_plots)  # label, plots, p_base (placed within win)
+            self.update_plot()    # update the plot
             # SignalSmoothingWindow
-            if self.smoothing_window:          # SignalSmoothingWindowが開いていれば
-                self.smoothing_window.close()  # Windowを閉じる
-                self.smoothing_window = None   # 参照を削除
-                self.open_smoothing_window()   # Windowを開く
+            if self.smoothing_window:          # if the SignalSmoothingWindow is open
+                self.smoothing_window.close()  # close the window
+                self.smoothing_window = None   # drop the reference
+                self.open_smoothing_window()   # open the window
 
     def open_file_write_dialog(self):
-        # 以前はダイアログを出さず、確認なしに{元ファイル名}_G{graph_id}.xlsxへ直接
-        # (既存ファイルがあれば無警告で上書きして)書き込んでいた。QFileDialogの
-        # 保存ダイアログを挟むことで、保存先の確認と、既存ファイルへの上書き確認
-        # (Qt標準機能)の両方が働くようにする。
+        # This used to skip the dialog and write directly to
+        # {original filename}_G{graph_id}.xlsx without confirmation
+        # (silently overwriting the file if it already existed). Routing
+        # this through a QFileDialog save dialog lets both the destination
+        # confirmation and the overwrite-existing-file confirmation (a Qt
+        # standard feature) work.
         default_name = f'{self.fname}_G{self.graph_id:02}.xlsx'
         is_image = self.graph_id in image_lst  # ImageItem (Scalogram)
 
         dialog = QFileDialog(self, t('plot.gui.save_graph_dialog_title'), default_name,
                              "Excel Files (*.xlsx)")
         dialog.setAcceptMode(QFileDialog.AcceptSave)
-        # CSV保存有無のCheckboxを追加するにはネイティブダイアログを使えないため無効化する。
+        # Adding the save-CSV-or-not checkbox requires disabling the native dialog.
         dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         csv_checkbox = QCheckBox(t('plot.gui.save_csv_checkbox'))
         if is_image:
-            # Scalogramは行列データをExcelシートへ書かず(重いため)CSVのみに保存する
-            # 設計になっているため、CSVを無効にすると実データがどこにも残らない。
-            # そのためScalogramの場合だけCSVを強制ONにし、Checkbox自体も操作不可にする。
+            # Scalogram is designed to skip writing the matrix data to an
+            # Excel sheet (too heavy) and keep it in CSV only, so disabling
+            # CSV would leave the actual data nowhere at all. So CSV is
+            # forced on, and the checkbox itself disabled, only for Scalogram.
             csv_checkbox.setChecked(True)
             csv_checkbox.setEnabled(False)
             csv_checkbox.setToolTip(t('plot.gui.save_csv_checkbox_forced_tip'))
         else:
-            csv_checkbox.setChecked(False)  # Default: 保存しない
+            csv_checkbox.setChecked(False)  # default: do not save
             csv_checkbox.setToolTip(t('plot.gui.save_csv_checkbox_tip'))
         layout = dialog.layout()
         layout.addWidget(csv_checkbox, layout.rowCount(), 0, 1, layout.columnCount())
 
         if dialog.exec_() != QFileDialog.Accepted:
-            return  # キャンセルされた場合は何もしない
+            return  # do nothing if cancelled
         selected = dialog.selectedFiles()
         if not selected:
             return
@@ -545,9 +552,11 @@ class MainWindow(QMainWindow):
         print(f'{value=}')
 
     def toggle_full_range(self):
-        """最下段の選択範囲を、全範囲 <-> 直前に選択していた範囲でトグルする。
-        上部ツールバーのボタンと最下段グラフ左の"F"ボタン、どちらから押されても
-        両方のBackground色(checked状態)をregion_mgrの実際の状態に同期させる。"""
+        """Toggle the bottom row's selected range between full range and the
+        previously selected range. Whichever is pressed -- the top toolbar
+        button or the "F" button to the left of the bottom graph -- both
+        buttons' background color (checked state) is synced to region_mgr's
+        actual state."""
         is_full = self.region_mgr.toggle_full_range() if hasattr(self, 'region_mgr') else False
         self.full_range_button.setChecked(is_full)
         if hasattr(self, 'plots') and hasattr(self.plots, 'full_range_button'):
@@ -561,7 +570,7 @@ class MainWindow(QMainWindow):
             self.time_offset = self.data.cpt_list[selected_cpt - 1] if selected_cpt > 0 else 0
         # For Timeseries
         if hasattr(self, 'curves'):
-            # ✅ RegionManagerにシフト量を伝える
+            # tell RegionManager the shift amount
             self.region_mgr.set_x_shift(self.time_offset + self.add_shift)
             for cur, (x, y) in zip(self.curves, self.plot_data.data):
                 if len(x) == 0:
@@ -569,12 +578,13 @@ class MainWindow(QMainWindow):
                     return
                 else:
                     x_shifted = x - self.time_offset - self.add_shift
-                    x_d, y_d = pltutils.decimate_fixed(x_shifted, y)  # ✅ 間引き
+                    x_d, y_d = pltutils.decimate_fixed(x_shifted, y)  # decimate
                     cur.setData(x_d, y_d)
 
-            # 最下段の概観(region select用)プロットは、常にport0固定だとSelect Port
-            # でport0を非表示にしたときも表示され続けて不自然に見えるため、
-            # 現在表示中(チェック済み)の先頭ポートを使う。
+            # If the bottom row's overview (region-select) plot were always
+            # fixed to port0, it would keep showing even after port0 is
+            # hidden via Select Port, which looks wrong -- so it uses the
+            # first currently displayed (checked) port instead.
             base_idx = 0
             if self.checkboxes:
                 checked = [num for num, cb in self.checkboxes if cb.isChecked()]
@@ -594,7 +604,7 @@ class MainWindow(QMainWindow):
                         return
                     else:
                         x_shifted = x - self.time_offset - self.add_shift
-                        x_d, y_d = pltutils.decimate_fixed(x_shifted, y)  # ✅ 間引き
+                        x_d, y_d = pltutils.decimate_fixed(x_shifted, y)  # decimate
                         cur.setData(x_d, y_d)
 
             visible_all = False
@@ -623,12 +633,12 @@ class MainWindow(QMainWindow):
                 pltutils.shift_image(im, t, f, self.time_offset + self.add_shift)
 
         self.plots.show_or_hide(self.win, self.checkboxes)
-        self.plot_vertical_lines()  # 縦線を引く
+        self.plot_vertical_lines()  # draw vertical lines
         self.show_filter_label()    # Filter label
 
     def plot_vertical_lines(self):
         def update_lines(check_box, line_list_name, data_source, plot_func):
-            # チェックが有効なら線を更新、無効なら削除だけ
+            # update the lines if the checkbox is checked, otherwise just remove them
             lines = getattr(self, line_list_name, [])
             for (p, l) in lines:
                 p.removeItem(l)
@@ -640,7 +650,7 @@ class MainWindow(QMainWindow):
                 setattr(self, line_list_name, new_lines)
 
         print(t('plot.selected_graph', graph=self.selected_graph))
-        # 'PowerSpectra' の時は縦線は非表示
+        # hide the vertical lines when the graph is 'PowerSpectra'
         if 'PowerSpectra' not in self.selected_graph:
             # At Mark points
             update_lines(
@@ -667,24 +677,24 @@ class MainWindow(QMainWindow):
                 pltutils.plot_additional_lines)
 
         label_parts = []
-        # LT 表示
+        # LT display
         lt_dict = getattr(self.data, 'LT_dict', None)
         if self.LT_check and isinstance(lt_dict, dict) and lt_dict:
             key, val = next(iter(lt_dict.items()))
             label_parts.append(f"{key}={val}(sec)")
-        # PRE 表示
+        # PRE display
         pre_dict = getattr(self.data, 'PRE_dict', None)
         if self.PRE_check and isinstance(pre_dict, dict):
             pre_parts = [f"{k}={v}" for k, v in pre_dict.items() if not np.isnan(v)]
             if pre_parts:
                 label_parts.append(', '.join(pre_parts))
-        # 表示更新
+        # update the display
         label2_text = '; '.join(label_parts)
         self.label2.setText(label2_text)
         self.label2.setToolTip(t('plot.gui.label2_tip') if label2_text else '')
 
     def show_filter_label(self):
-        if all(not v for v in self.filter.values()):  # すべて[]ならば
+        if all(not v for v in self.filter.values()):  # if every value is []
             self.label3.setText('')
             self.label3.setToolTip('')
         else:
@@ -695,65 +705,68 @@ class MainWindow(QMainWindow):
         return merge_filter_and_history(self.filter, self.history)
 
     def update_plot(self):
-        # graphの種類に応じて描画
+        # draw according to the graph type
         self.graph_id = int(re.match(r'^(\d+)\:', self.selected_graph).group(1))
         debug_print(self.args, f'[Debug]{self.graph_id=}, {self.selected_graph=}')
-        # future 結果のキャッシュ
+        # cache the future's result
         if self.graph_id in wavelet_lst:
             self.wv_data, self.energy, self.power, self.max_power_freq, self.max_power_bpm = self.future.result()
 
-        # PlotItem/ViewBoxを使い回さず、open_file_select_dialog()と同じ手順で毎回作り直す。
-        # 過去にPlotItemを使い回すと(特にPowerSpectra/Scalogramのようにcurve/colorbar/
-        # imageが入れ替わるとき)"wrapped C/C++ object ... has been deleted"というクラッシュが
-        # 再現したため(pyqtgraph/Qtのオブジェクト寿命管理起因、都度作り直すことで回避する)。
+        # Rather than reusing the PlotItem/ViewBox, it is recreated every
+        # time, the same as in open_file_select_dialog(). Reusing a PlotItem
+        # in the past (especially when the curve/colorbar/image changes, as
+        # with PowerSpectra/Scalogram) reproduced a
+        # "wrapped C/C++ object ... has been deleted" crash (caused by
+        # pyqtgraph/Qt object-lifetime management; recreating it each time avoids this).
         self.win.clear()
         self.plots.remove_right_axes()
         self.plots = pltutils.InitPlots(self.win, self.num_plots)
-        # グラフを作り直すとregion_mgrも新規になり全範囲表示状態はリセットされるため、
-        # ボタンの見た目(checked状態のBackground色)もそれに合わせて戻す。
+        # Recreating the graph also creates a new region_mgr, resetting the
+        # full-range display state, so the button's appearance (the
+        # checked-state background color) is reset to match.
         self.full_range_button.setChecked(False)
-        # InitPlots()は毎回新しいFull Rangeボタン(最下段グラフ左の"F")を作るため、
-        # そのたびに接続し直す必要がある。
+        # InitPlots() creates a new Full Range button (the "F" button to the
+        # left of the bottom graph) every time, so it must be reconnected each time.
         self.plots.full_range_button.clicked.connect(self.toggle_full_range)
         if self.graph_id in image_lst:    # ImageItem (Scalogram)
-            # 前回がPlotItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
+            # Clear leftovers from a previous PlotItem-family graph (used by hide_show_plot()'s hasattr checks).
             for stale in ('curves', 'p_base_plot', 'derivative_curves', 'peaks', 'valleys',
                           'plot_data', 'mavg_curves'):
                 if hasattr(self, stale):
                     delattr(self, stale)
-            self.derivatives.setVisible(False)  # ImageItem系にはDerivatives(1st/2nd)は無関係
-            self.peaks_check.setVisible(False)  # ImageItem系にはPeakも無関係
+            self.derivatives.setVisible(False)  # Derivatives (1st/2nd) are irrelevant for ImageItem-family graphs
+            self.peaks_check.setVisible(False)  # Peak is also irrelevant for ImageItem-family graphs
             self.image_data = graph_func[self.graph_id](self)
             self.plots.set_title(self.image_data.title)
             self.img, self.colorbar, self.region_mgr, self.cross_hair = pltutils.plot_scalogram(
                 self.plots, self.image_data)
         else:                        # PlotItem
-            # 前回がImageItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
+            # Clear leftovers from a previous ImageItem-family graph (used by hide_show_plot()'s hasattr checks).
             for stale in ('img', 'colorbar', 'image_data'):
                 if hasattr(self, stale):
                     delattr(self, stale)
             self.derivatives.setVisible(True)
             self.peaks_check.setVisible(True)
-            self.plot_data = graph_func[self.graph_id](self)  # self を渡すことで lambda(obj) が使える
+            self.plot_data = graph_func[self.graph_id](self)  # passing self lets lambda(obj) be used
             self.plots.set_title(self.plot_data.title)
             self.curves, self.p_base_plot, self.region_mgr, self.cross_hair = pltutils.plot_timeseries(
                 self.plots, self.plot_data)
             # Moving Average curves
             if hasattr(self, 'mavg_curves'):
                 del self.mavg_curves
-            # Derivatives (calc_derivatives() & plot_right_axis() listが返される)
+            # Derivatives (calc_derivatives() & plot_right_axis() return a list)
             self.derivative_data = pltutils.calc_derivatives(self.plot_data)
             self.derivative_curves = pltutils.plot_right_axis(
                 self.plots.plts_right, self.derivative_data)
-            # Peaks & Valleys描画(ImageItem以外)
+            # Draw Peaks & Valleys (non-ImageItem graphs only)
             self.peaks_data, self.valleys_data = pltutils.calc_peaks_and_valleys(self.plot_data)
             self.peaks = pltutils.plot_peaks(self.plots, self.peaks_data, 'circle')
             self.valleys = pltutils.plot_peaks(self.plots, self.valleys_data, 'square')
             visible = self.peaks_check.isChecked()
             for curve in self.peaks + self.valleys:
                 curve.setVisible(visible)
-        # PowerSpectra(FFT)はX軸がFreq.でTimeではないため、
-        # Mark/Select Mark/Shift timeといったTime系の操作UIは無関係。
+        # PowerSpectra (FFT) has Freq. on the X axis rather than Time, so
+        # Time-based operation UI such as Mark/Select Mark/Shift time is irrelevant.
         has_time_axis = self.graph_id not in freq_lst
         self.mark_check.setVisible(has_time_axis and len(self.data.cpt_list) > 0)
         self.time_shift.setVisible(has_time_axis and len(self.data.cpt_list) > 0)
@@ -764,13 +777,13 @@ class MainWindow(QMainWindow):
             append_window_to_pdf(self, output_pdf)
 
     def select_graph(self):
-        # 選択されたアクションのテキストを取得
+        # get the selected action's text
         selected_action = self.sender()
         self.selected_graph = selected_action.text()
         self.update_plot()
 
     def update_shift_value(self):
-        # テキストボックスの値を取得して数値に変換，空の場合は0
+        # get the text box's value and convert it to a number; 0 if empty
         text = self.shift_input.text()
         self.add_shift = int(text) if text else 0
         if self.add_shift > self.data.data_t[0][-1]:
@@ -780,11 +793,11 @@ class MainWindow(QMainWindow):
 
 
 def append_window_to_pdf(window, existing_pdf_path, dpi=300):
-    # 一時PDFに書き出す
+    # write out to a temporary PDF
     temp_pdf = existing_pdf_path + ".temp.pdf"
     _save_window_as_pdf(window, temp_pdf, dpi)
 
-    # 既存 + 新しいPDFをマージして新しい一時ファイルへ
+    # merge the existing + new PDF into a new temporary file
     merged_pdf = existing_pdf_path + ".merged.pdf"
     merger = PdfMerger()
     if os.path.exists(existing_pdf_path):
@@ -793,7 +806,7 @@ def append_window_to_pdf(window, existing_pdf_path, dpi=300):
     merger.write(merged_pdf)
     merger.close()
 
-    # 上書き
+    # overwrite
     os.replace(merged_pdf, existing_pdf_path)
     os.remove(temp_pdf)
 
@@ -811,7 +824,7 @@ def _save_window_as_pdf(window, filename, dpi=300):
     image = pixmap.toImage()
     rect = painter.viewport()
     scaled_size = image.size()
-    scaled_size.scale(rect.size(), 1)  # アスペクト比維持
+    scaled_size.scale(rect.size(), 1)  # preserve aspect ratio
     painter.setViewport(rect.x(), rect.y(), scaled_size.width(), scaled_size.height())
     painter.setWindow(image.rect())
     painter.drawImage(0, 0, image)
@@ -819,12 +832,12 @@ def _save_window_as_pdf(window, filename, dpi=300):
 
 
 def get_newest_file_name(folder_path):
-    # .datファイルのみをフィルタリング
+    # filter to only .dat files
     dat_files = [f for f in os.listdir(folder_path) if f.endswith('.dat')]
-    # .datファイルが存在しない場合は None を返す
+    # return None if no .dat files exist
     if not dat_files:
         return None
-    # 最新の.datファイルを選択
+    # select the newest .dat file
     newest_file = max(dat_files, key=lambda f: os.path.getmtime(os.path.join(folder_path, f)))
     return os.path.join(folder_path, newest_file)
 
@@ -838,7 +851,7 @@ def get_files_from_directory(folder):
     return sorted(dat_files)
 
 
-# ディレクトリが存在しない場合は作成する
+# create the directory if it doesn't exist
 default_dir = './data/'
 os.makedirs(default_dir, exist_ok=True)
 
@@ -849,14 +862,16 @@ with open(default_filter_file, "r", encoding="utf-8") as f:
 default_filename = get_newest_file_name(default_dir)
 default_wpconfig = 'default_wavelet_params.json'
 
-# MainWindow.update_plot()がargs.pdffile時に参照するPDF出力先。
-# main()のローカル変数だと(update_plot()はモジュールグローバルしか見えない)
-# NameErrorになるため、モジュールレベルで1回だけ決める(1回の実行で1ファイルに蓄積)。
+# The PDF output destination MainWindow.update_plot() refers to when
+# args.pdffile is set. A local variable in main() would raise NameError
+# (update_plot() can only see module globals), so it's decided once at the
+# module level (accumulating into one file per run).
 output_pdf = f"Figures_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
-# === パラメータ定義（型・デフォルト・説明）を一元化 ===
-# 'help' はi18nカタログのkey。動的な値を埋め込むものだけ 'help_kwargs' を持つ
-# （--lang解決前にこの辞書自体は評価されるため、実際の翻訳はparse_args()内で行う）。
+# === Centralize parameter definitions (type, default, description) ===
+# 'help' is an i18n catalog key. Only entries with dynamic values to embed
+# have 'help_kwargs' (this dict itself is evaluated before --lang is
+# resolved, so the actual translation happens inside parse_args()).
 DEFAULTS = {
     'dirname': {
         'short': '-d',
@@ -987,10 +1002,10 @@ def parse_args():
         action="version",
         version=f"%(prog)s {__version__}",
         help=t('help.version'))
-    # 共通パラメータを定義
+    # define the common parameters
     for key, meta in DEFAULTS.items():
         flags = [meta.get("short", ""), f"--{key}"]
-        flags = [f for f in flags if f]  # 空要素除外
+        flags = [f for f in flags if f]  # exclude empty elements
 
         help_kwargs = meta['help_kwargs']() if 'help_kwargs' in meta else {}
         help_text = f"{t(meta['help'], **help_kwargs)} (default: {meta['default']})"
@@ -1007,7 +1022,7 @@ def parse_args():
         else:
             parser.add_argument(*flags, type=meta["type"], default=meta["default"], help=help_text)
 
-    # config.json用オプション(これは他と独立)
+    # option for config.json (independent of the others)
     parser.add_argument('--config', type=str, help=t('plot.help.config'))
     parser.add_argument('-lang',
                         '--lang',
@@ -1019,7 +1034,7 @@ def parse_args():
     args = parser.parse_args()
     i18n.set_language(args.lang)
 
-    # configファイルが指定されていたら読み込み
+    # load the config file if one was specified
     if args.config:
         try:
             with open(args.config, 'r') as f:
@@ -1027,7 +1042,7 @@ def parse_args():
                 for key, value in config_data.items():
                     if hasattr(args, key):
                         expected_type = DEFAULTS[key]["type"]
-                        # 文字列で保存された数値などに対応
+                        # handle values like numbers stored as strings
                         setattr(args, key, expected_type(value))
         except Exception as e:
             print(t('plot.config_load_error', err=e))
@@ -1042,7 +1057,7 @@ def build_wavelet_params(args) -> WaveletParams:
     else:
         params = WaveletParams()  # default
 
-    # CLI引数がある場合は上書き
+    # override with CLI arguments if given
     if args.wlrange:
         params.range = args.wlrange
     if args.wlomega0:
@@ -1058,8 +1073,8 @@ def main():
     app.setWindowIcon(QIcon('icon.png'))
     app.setApplicationName("sensor-bridge")
 
-    # excel出力 (headless): GUIの「Save Graph」ボタン(Ctrl+S)と同じ
-    # MainWindow.open_file_write_dialog() を呼ぶ。ウィンドウは表示しない。
+    # Excel output (headless): calls MainWindow.open_file_write_dialog(),
+    # the same as the GUI's "Save Graph" button (Ctrl+S). The window is not shown.
     if args.excel:
         window = MainWindow(args.filename, args)
         window.open_file_write_dialog()

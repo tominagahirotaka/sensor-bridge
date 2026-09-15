@@ -44,16 +44,18 @@ def setQPushButton(str, func, self=None, sizepolicy=None, move=None):
 def setQLCDNumber(self, style=None, digitcount=None):
     lcd = QLCDNumber(self)
     if digitcount is not None:
-        lcd.setDigitCount(digitcount)     # 表示桁数を7に変更(default 5?桁)
+        lcd.setDigitCount(digitcount)     # change digit count to 7 (default is 5? digits)
     if style is not None:
         lcd.setSegmentStyle(eval('QLCDNumber.' + style))
     return lcd
 
 
 def setQComboBox(self, items, data=None):
-    """items: 表示Textのlist。data: 各項目に紐づける実際の値のlist(省略時はTextがそのまま値になる、
-    従来通りの挙動)。例: setQComboBox(self, ['1Hz', '10Hz'], data=['1', '2'])とすると、
-    表示は'1Hz'/'10Hz'のまま、選択結果(setQDialog経由)は'1'/'2'になる。"""
+    """items: list of displayed text. data: list of the actual value tied to
+    each item (when omitted, the text itself is the value, the previous
+    behavior). Example: setQComboBox(self, ['1Hz', '10Hz'], data=['1', '2'])
+    keeps '1Hz'/'10Hz' displayed while the selected result (via setQDialog)
+    becomes '1'/'2'."""
     cbox = QComboBox(self)
     if data is not None:
         for text, value in zip(items, data):
@@ -65,9 +67,10 @@ def setQComboBox(self, items, data=None):
 
 def setQAction(self, name, func, Icon=None):
     action = QAction(Icon, '&' + name, self) if Icon is not None else QAction('&' + name, self)
-    # nameに含まれる大文字1文字ごとにCtrl+<文字>のShortcutを割り当てる慣習
-    # （例: "MArk"->Ctrl+M と Ctrl+A の両方でこのActionを実行できる）。
-    # 日本語等、大文字を含まないnameの場合はShortcutを割り当てない（Menu自体は使える）。
+    # Convention: assign a Ctrl+<letter> shortcut for each uppercase letter
+    # in `name` (e.g. "MArk" -> both Ctrl+M and Ctrl+A trigger this action).
+    # For a name with no uppercase letters (e.g. Japanese text), no shortcut
+    # is assigned (the menu item itself still works).
     modifier = 'Meta+' if sys.platform == 'darwin' else 'Ctrl+'
     shortcuts = [modifier + letter for letter in re.findall('[A-Z]', name)]
     if shortcuts:
@@ -150,7 +153,7 @@ class setQDialog(QDialog):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle(self.title)   # title設定
+        self.setWindowTitle(self.title)   # set the title
         param = []
         for key, cont in self.template.items():
             if 'Multi' in cont[2]:
@@ -170,8 +173,9 @@ class setQDialog(QDialog):
                 continue
             if 'ComboBox' in self.template[key][2]:
                 cbox = self.template[key][1]
-                # data付きComboBox(setQComboBox(..., data=[...]))はfindDataで、
-                # 従来通りTextがそのまま値のComboBoxはfindTextで現在値を復元する。
+                # A ComboBox with data (setQComboBox(..., data=[...])) restores
+                # its current value via findData; a plain text-as-value
+                # ComboBox restores it via findText.
                 idx = cbox.findData(val)
                 if idx < 0:
                     idx = cbox.findText(val)
@@ -218,35 +222,37 @@ class setQDialog(QDialog):
 
 class FigureQtPG:
     """
-    FigureQt の pyqtgraph 互換実装。
-    window.py を無変更で使えるよう、インターフェースを統一。
+    A pyqtgraph-compatible implementation of FigureQt.
+    Keeps the same interface so window.py can use it unmodified.
     """
 
-    PEAK_HISTORY_WINDOW_SEC = 2.0  # Peak検出用の履歴バッファが保持する秒数
-    PEAK_LOCAL_WIDTH = 2  # find_peaksのlocal_width。境界除外幅としても使う
-    AVERAGE_TIME_CONSTANT_SEC = 3.0  # Peak検出の閾値(self.average)に使う移動平均の時定数
-    PEAK_TIME_BUFFER_SIZE = 7  # peak_interval算出に使う直近Peak時刻の保持数
+    PEAK_HISTORY_WINDOW_SEC = 2.0  # seconds of history kept by the peak-detection buffer
+    PEAK_LOCAL_WIDTH = 2  # find_peaks' local_width; also used as the edge-exclusion width
+    AVERAGE_TIME_CONSTANT_SEC = 3.0  # time constant of the moving average used for the peak-detection threshold (self.average)
+    PEAK_TIME_BUFFER_SIZE = 7  # number of recent peak times kept for computing peak_interval
 
     def __init__(self, board, figs, args):
         self.board = board
         self.next_loop = False
         self.num_of_loop = 0
         self.top_args = args
-        # Test/Run/caliBrateが押されるたびにPico側の経過時間は0付近から数え直される。
-        # self(FigureQtPG)はget.py起動中ずっと使い回される(initCanvas()は1回しか
-        # 呼ばれない)ため、これで「時間が巻き戻った」検出を行いPeak検出状態をリセットする。
+        # Every time Test/Run/caliBrate is pressed, the Pico's elapsed time
+        # starts counting again from near 0. self (FigureQtPG) is reused for
+        # the whole lifetime of get.py (initCanvas() is only called once),
+        # so this is used to detect "time jumped backward" and reset the
+        # peak-detection state.
         self._last_seen_time = float('-inf')
         print(f"{args=}")
 
-        pg.setConfigOptions(antialias=False, useOpenGL=False)  # まず安定優先
+        pg.setConfigOptions(antialias=False, useOpenGL=False)  # prioritize stability first
         self.win = pg.GraphicsLayoutWidget()
         self.fig = self.win
         self._init_fig(figs)
 
     # ------------------------------------------------------------------
     def _mpl_fargs_to_pg(self, fargs, color):
-        """matplotlib の fargs → pyqtgraph の pen/symbol パラメータに変換"""
-        # 線幅
+        """Convert matplotlib's fargs to pyqtgraph's pen/symbol parameters"""
+        # line width
         lw = fargs.get('lw', fargs.get('linewidth', 1))
 
         # linestyle → pen style
@@ -255,7 +261,7 @@ class FigureQtPG:
             '--': Qt.DashLine,
             '-.': Qt.DashDotLine,
             ':': Qt.DotLine,
-            '': Qt.NoPen,   # 線なし
+            '': Qt.NoPen,   # no line
         }
         ls = fargs.get('ls', fargs.get('linestyle', '-'))
         pen = pg.mkPen(color, width=lw, style=ls_map.get(ls, Qt.SolidLine))
@@ -273,20 +279,20 @@ class FigureQtPG:
         }
         ms = fargs.get('ms', fargs.get('markersize', 0))
         marker = fargs.get('marker', '')
-        # ms=0 または marker='' のときは必ず symbol=None
+        # symbol must always be None when ms=0 or marker=''
         if ms == 0 or marker == '' or marker is None:
             symbol = None
-            symbol_size = 0        # ← NaN回避のため 0 を明示
+            symbol_size = 0        # explicit 0 to avoid NaN
             symbol_brush = None
         else:
             symbol = marker_map.get(marker, None)
-            symbol_size = int(ms)  # ← float→int に変換
+            symbol_size = int(ms)  # convert float -> int
             symbol_brush = pg.mkBrush(color) if symbol else None
 
         return pen, symbol, symbol_size, symbol_brush
 
     def _mpl_pargs_to_pg(self, pargs):
-        """matplotlib の pargs → pyqtgraph の peak marker パラメータに変換"""
+        """Convert matplotlib's pargs to pyqtgraph's peak marker parameters"""
         marker_map = {
             'o': 'o',
             's': 's',
@@ -307,17 +313,17 @@ class FigureQtPG:
         self.figs, self.args = figs[:-1], figs[-1]
         n_rows, n_cols = np.array(self.figs).shape
 
-        # _init_fig の先頭に一時追加
+        # Temporarily added at the top of _init_fig
         debug_print(self.top_args, f'    {self.board.__dict__=}')
 
-        # バッファサイズ（_init_buffers で実測dtを基に上書きされるまでの仮初期化）
-        self._buf_size = 1      # ← None だと np.full でエラーになるため仮値
+        # Buffer size (a placeholder until _init_buffers overwrites it based on the measured dt)
+        self._buf_size = 1      # placeholder, since None would error in np.full
         self._x_grid = np.array([0.0])
         self._buf_y = None
         self._fs_fixed = False
         self._range_fixed = False
 
-        # --- PlotItem / curve / peak / buffer を figs 構造に合わせて生成
+        # --- Create PlotItem / curve / peak / buffer to match the figs structure
         self.plots = []
         self.curves = []
         self.peaks = []
@@ -350,7 +356,7 @@ class FigureQtPG:
             self._buf_y.append([])
 
             for j, dic in enumerate(lst):
-                # --- PlotItem 生成
+                # --- Create the PlotItem
                 p = self.win.addPlot(row=k, col=j)
 
                 # sharex
@@ -362,7 +368,7 @@ class FigureQtPG:
                     # grid
                 p.showGrid(x=dic['grid'], y=dic['grid'], alpha=0.3)
 
-                # ラベル
+                # label
                 xlabel, ylabel = dic['label']
                 if ylabel:
                     p.setLabel('left', ylabel)
@@ -395,13 +401,13 @@ class FigureQtPG:
                 #     p.setYRange(float(tmp[0][0]), float(tmp[0][1]), padding=0)
                 #     p.disableAutoRange()
 
-                # data_num が2要素（x, y）の場合も考慮するなら
-                ylim = tmp[-1]  # 最後の要素が常にy範囲
+                # to also allow for data_num having 2 elements (x, y)
+                ylim = tmp[-1]  # the last element is always the y range
                 if ylim is not None:
                     p.setYRange(float(ylim[0]), float(ylim[1]), padding=0)
                     p.disableAutoRange()
 
-                # ズーム・パン無効（matplotlib版と同じ固定表示）
+                # disable zoom/pan (fixed display, same as the matplotlib version)
                 p.setMouseEnabled(x=False, y=False)
                 p.hideButtons()
 
@@ -415,7 +421,7 @@ class FigureQtPG:
                     p.addLegend(offset=(0, 0))
 
                 for i, dat in enumerate(dic['data']):
-                    # 色
+                    # color
                     color = COLORS_SET1[(j * len(lst) + i + 1) % len(COLORS_SET1)]
 
                     # curve
@@ -425,7 +431,7 @@ class FigureQtPG:
                     if dic['legend']:
                         curve = p.plot(pen=pen, symbol=symbol, symbolSize=symbol_size,
                                        symbolBrush=symbol_brush, symbolPen=pg.mkPen(
-                                           None),   # シンボルの枠線なし
+                                           None),   # no symbol outline
                                        name=dat[-1].get('leg_lab', ''))
                     else:
                         curve = p.plot(pen=pen, symbol=symbol, symbolSize=symbol_size,
@@ -439,23 +445,25 @@ class FigureQtPG:
                                        symbolBrush=pk_brush, symbolSize=pk_size)
                     self.peaks[k][j].append(peak_plot)
 
-                    # y バッファ（nan 初期化）
+                    # y buffer (initialized to nan)
                     self._buf_y[k][j].append(np.full(self._buf_size, np.nan))
 
     def _init_buffers(self, dt):
-        """初回 update() 時に実測 dt でバッファ・Peak検出用履歴を初期化する。"""
+        """Initialize the buffers and peak-detection history using the measured dt on the first update() call."""
         self._buf_size = int(self.board.time_width / dt) + 1
         self._x_grid = np.linspace(0, self.board.time_width, self._buf_size, endpoint=False)
         self._buf_y = [
             [[np.full(self._buf_size, np.nan) for _ in dic['data']] for dic in lst]
             for lst in self.figs]
 
-        # Peak検出の閾値(self.average)用の移動平均係数。dtから時定数を逆算する。
-        # (旧実装は alpha=0.5 固定で信号にほぼ即座に追従してしまい、静穏区間で閾値が
-        #  ゼロ近くまで落ちて僅かなノイズもPeakとして拾ってしまっていた)
+        # Moving-average coefficient for the peak-detection threshold
+        # (self.average), derived from dt so it matches the intended time
+        # constant. (The old implementation used a fixed alpha=0.5, which
+        # tracked the signal almost instantly and let the threshold fall
+        # near zero during quiet periods, picking up even slight noise as a peak.)
         self._avg_alpha = min(1.0, dt / self.AVERAGE_TIME_CONSTANT_SEC)
 
-        # peak検出用履歴バッファ
+        # history buffer for peak detection
         self.PEAK_HISTORY = int(self.PEAK_HISTORY_WINDOW_SEC / dt)
         debug_print(self.top_args, f'PEAK_HISTORY={self.PEAK_HISTORY}, dt={dt:.6f}')
         self._peak_history_x = [
@@ -467,8 +475,9 @@ class FigureQtPG:
         self._fs_fixed = True
 
     def _reset_peak_detection_state(self):
-        """Test/Run/caliBrateの再開始でPico側の経過時間が巻き戻った際に、
-        Peak検出関連のバッファ(履歴・閾値・直近peak時刻/間隔)を初期状態へ戻す。"""
+        """Reset the peak-detection buffers (history, threshold, recent peak
+        times/interval) to their initial state when Test/Run/caliBrate is
+        restarted and the Pico's elapsed time jumps backward."""
         for k, lst in enumerate(self.figs):
             for j, dic in enumerate(lst):
                 for i, dat in enumerate(dic['data']):
@@ -481,15 +490,17 @@ class FigureQtPG:
     def update(self, stream):
         data_t = next(stream).transpose()
 
-        # 初回のみ実測 dt でバッファを確定
+        # Fix the buffer size from the measured dt, only on the first call
         if not self._fs_fixed:
             dt = (data_t[0][-1] - data_t[0][0]) / (data_t.shape[1] - 1)
             self._init_buffers(dt)
         elif data_t[0][-1] < self._last_seen_time - 1.0:
-            # Test/Run/caliBrateが再度押され、Pico側の経過時間が0付近から数え直された。
-            # 履歴バッファをクリアしないと、前回セッションの(スケールの異なる)古い
-            # タイムスタンプが新しいものと混在し、min_peak_distanceの算出が壊れて
-            # 負値になる等、Peak検出が数秒間デタラメになってしまう。
+            # Test/Run/caliBrate was pressed again, and the Pico's elapsed
+            # time started counting again from near 0. Without clearing the
+            # history buffer, the previous session's old (differently
+            # scaled) timestamps would mix with the new ones, breaking the
+            # min_peak_distance calculation (e.g. producing a negative
+            # value) and making peak detection garbage for a few seconds.
             self._reset_peak_detection_state()
         self._last_seen_time = data_t[0][-1]
 
@@ -510,11 +521,11 @@ class FigureQtPG:
                                 np.array(dat[-1]['raw']) * len(self.board.structure)
                             ]
 
-                            # 現在の x 位置（0〜time_width）
+                            # current x position (0 to time_width)
                             x_now = plot_data[0][-1] % self.board.time_width
                             x_prev = plot_data[0][-2] % self.board.time_width
-                            y_now = plot_data[1][-1]   # ← 追加
-                            y_prev = plot_data[1][-2]   # ← 追加
+                            y_now = plot_data[1][-1]   # added
+                            y_prev = plot_data[1][-2]   # added
 
                             self._erase_and_write_buffer(k, j, i, x_prev, x_now, y_prev, y_now)
 
@@ -524,10 +535,14 @@ class FigureQtPG:
                             if dat[-1]['peak']:
                                 self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
                         except Exception:
-                            # PyQtはQTimer.timeout等のslot内で起きた例外を既定では画面上に
-                            # 出さずに握りつぶすため、原因不明のまま「何も起きない」ように
-                            # 見えてしまう。ここで明示的にtracebackを出し、以後は状況が
-                            # 変わらない限り毎サンプル出続けないよう最初の数回だけに絞る。
+                            # PyQt swallows exceptions raised inside a slot
+                            # (e.g. QTimer.timeout) by default without
+                            # displaying them, so the failure otherwise looks
+                            # like silent "nothing happens" with no visible
+                            # cause. Print the traceback explicitly here, and
+                            # cap it to the first few occurrences so it
+                            # doesn't spam every sample as long as the
+                            # underlying condition persists.
                             err_count = getattr(self, '_update_err_count', None)
                             if err_count is None:
                                 err_count = self._update_err_count = {}
@@ -542,13 +557,14 @@ class FigureQtPG:
         return data_t.T[[0, -1]].T, self.peak_interval.transpose()[0][0]
 
     def _erase_and_write_buffer(self, k, j, i, x_prev, x_now, y_prev, y_now):
-        """プロット(k,j,i)のyバッファについて、現在位置より少し先を
-        nanクリアしてから新しい2点を線形補間でグリッドへ書き込み、Curveに反映する。"""
-        # ① squares相当：現在位置より少し先のnanクリア範囲を決定
+        """For plot (k,j,i)'s y buffer, nan-clear a short span just ahead of
+        the current position, then write the new two points into the grid
+        via linear interpolation and push them to the curve."""
+        # (1) equivalent of "squares": decide the nan-clear span just ahead of the current position
         erase_width = self.board.time_width / 20
         erase_end = (x_now + erase_width) % self.board.time_width
 
-        # ② グリッドインデックスに変換
+        # (2) convert to grid indices
         def x_to_idx(x):
             return int(x / self.board.time_width * self._buf_size)
 
@@ -556,7 +572,7 @@ class FigureQtPG:
         idx_now = x_to_idx(x_now)
         idx_erase_end = x_to_idx(erase_end)
 
-        # ③ 先読みクリア（squares の代替）
+        # (3) look-ahead clear (replacement for squares)
         if idx_erase_end > x_to_idx(x_now):
             self._buf_y[k][j][i][x_to_idx(x_now):idx_erase_end] = np.nan
         else:
@@ -564,9 +580,9 @@ class FigureQtPG:
             self._buf_y[k][j][i][x_to_idx(x_now):] = np.nan
             self._buf_y[k][j][i][:idx_erase_end] = np.nan
 
-        # ④ 新しい2点を書き込み（線形補間でグリッドへ）
+        # (4) write the new two points (into the grid via interpolation)
         if idx_prev != idx_now:
-            # 2点間を補間してグリッドに埋める
+            # interpolate between the two points to fill the grid
             x_range = self._x_grid[idx_prev:idx_now + 1]
             if len(x_range) > 1 and (x_now - x_prev) > 0:
                 y_interp = np.interp(x_range, [x_prev, x_now], [y_prev, y_now])
@@ -574,17 +590,18 @@ class FigureQtPG:
             else:
                 self._buf_y[k][j][i][idx_now] = y_now
 
-        # ⑤ setData（x は固定グリッド、y だけ更新）
+        # (5) setData (x is the fixed grid; only y is updated)
         self.curves[k][j][i].setData(x=self._x_grid, y=self._buf_y[k][j][i])
 
     def _detect_and_record_peak(self, k, j, i, x_raw, y_now):
-        """プロット(k,j,i)のPeak履歴に新しい点を追加し、PEAK_HISTORY点たまったら
-        Peakを検出してpeak_time/peak_interval/散布図マーカーに反映する。"""
-        # 履歴に追加（maxlen=PEAK_HISTORYのdequeなので、超えた分は古いものから自動的に破棄される）
+        """Append a new point to plot (k,j,i)'s peak history, and once
+        PEAK_HISTORY points have accumulated, detect peaks and update
+        peak_time/peak_interval/the scatter marker."""
+        # Append to the history (a deque with maxlen=PEAK_HISTORY, so anything over the limit is auto-discarded oldest-first)
         self._peak_history_x[k][j][i].append(x_raw)
         self._peak_history_y[k][j][i].append(y_now)
 
-        # PEAK_HISTORY点たまったらpeak検出
+        # Once PEAK_HISTORY points have accumulated, run peak detection
         if len(self._peak_history_y[k][j][i]) == self.PEAK_HISTORY:
             hy = np.array(self._peak_history_y[k][j][i])
             hx = np.array(self._peak_history_x[k][j][i])
@@ -596,14 +613,17 @@ class FigureQtPG:
                 min_peak_distance=min_peak_distance)
             n_raw = len(p_idxs)
 
-            # ウィンドウの右端付近(直近local_width点)はfind_peaksの端点パディング
-            # (右端をlocal_width回複製する)により、まだ下降が確認できていない点でも
-            # 自分自身の複製とtieして極大/極小と誤判定されうる。信頼できない候補として除外する。
+            # Near the window's right edge (the last local_width points),
+            # find_peaks' edge padding (which duplicates the rightmost value
+            # local_width times) can make a point that hasn't actually
+            # started to descend yet tie with its own duplicate and be
+            # misjudged as a local max/min. Exclude these as untrustworthy candidates.
             if len(p_idxs) > 0:
                 p_idxs = p_idxs[p_idxs < len(hy) - self.PEAK_LOCAL_WIDTH]
 
-            # --debug時のみ: なぜPeakが見つからない/HRが更新されないのかを追える簡易ログ。
-            # (k,j,i)ごとに約1秒おき(PEAK_HISTORY/2回に1回)だけ出す。
+            # --debug only: a lightweight log to trace why a peak isn't
+            # found / HR isn't updating. Printed roughly once per second per
+            # (k,j,i) (once every PEAK_HISTORY/2 calls).
             cnt_dict = getattr(self, '_peak_debug_count', None)
             if cnt_dict is None:
                 cnt_dict = self._peak_debug_count = {}
@@ -618,22 +638,28 @@ class FigureQtPG:
                     f'peak_interval={self.peak_interval[k][j][i]:.4f}')
 
             if len(p_idxs) > 0:
-                # 最新のpeakのみ使用（履歴の中央付近）
+                # use only the most recent peak (near the middle of the history)
                 p_idx = p_idxs[-1]
-                # PEAK_HISTORYがdeque(maxlen)である以上この分岐はバッファが埋まった
-                # 後も毎サンプル真になるため、「新しいPeakかどうか」をここで判定しない
-                # と、同一Peakを毎回再検出してpeak_time(直近PEAK_TIME_BUFFER_SIZE件)の
-                # 履歴を重複で埋め潰し、peak_interval(ひいては心拍数)が実際より
-                # 大幅に短く算出されてしまう。
+                # Since PEAK_HISTORY is a deque(maxlen), this branch stays
+                # true on every sample once the buffer is full. Without
+                # checking here whether this is actually a *new* peak, the
+                # same peak would be re-detected every time, duplicating
+                # entries in the peak_time history (the most recent
+                # PEAK_TIME_BUFFER_SIZE entries) and making peak_interval
+                # (and hence the heart rate) come out much shorter than it
+                # actually is.
                 if hx[p_idx] > self.peak_time[k][j][i][-1]:
                     peak_x = hx[p_idx] % self.board.time_width
                     peak_y = hy[p_idx]
                     self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
                     self.peak_time[k][j][i][-1] = hx[p_idx]
-                    # dicrotic notch等、脈波の副次的な山を別Peakとして単発で誤検出
-                    # した場合、その1件だけがdiffを大きく歪める。単純平均だと
-                    # HBR表示がその1件に引っ張られ「時々倍になる」ような揺らぎに
-                    # 直結するため、外れ値に強い中央値を使う。
+                    # If a secondary bump in the pulse wave (e.g. a dicrotic
+                    # notch) is spuriously detected once as a separate peak,
+                    # that single occurrence would badly skew a plain diff
+                    # average. A simple mean would let the HBR display get
+                    # pulled by that one occurrence, producing a "sometimes
+                    # doubles" kind of instability, so an outlier-resistant
+                    # median is used instead.
                     self.peak_interval[k][j][i] = np.median(
                         np.diff(self.peak_time[k][j][i]))
                     self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])

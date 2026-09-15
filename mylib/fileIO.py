@@ -46,7 +46,7 @@ class FileIO:
         os.makedirs(dirname, exist_ok=True)
         self.data_filename = f'{dirname}/{head_str}_{format_time}.dat'
         self.cpt_filename = f'{dirname}/{head_str}_{format_time}.cpt'
-        # object p を pickle化して,ファイルの先頭に書く
+        # Pickle object p and write it at the start of the file
         self.fwrite = open(self.data_filename, 'wb')
         self.fwrite.write(self.make_header(p))
         print(t('fio.write_to', path=self.data_filename))
@@ -69,7 +69,7 @@ class FileIO:
             self.fread.close()
             self.fread = open(self.data_filename, 'rb')
             header = None
-        # Check pointsファイルが存在すればそこからHeaderを読込む
+        # If a checkpoint file exists, load the header from it instead
         if os.path.exists(self.cpt_filename):
             with open(self.cpt_filename, 'rb') as f:
                 _, checkpoint_header = self._read_pickled_header(f)

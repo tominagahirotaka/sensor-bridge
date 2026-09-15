@@ -59,7 +59,7 @@ class PlotData:
             sheet_count = 0
             for i, ((x, y), label) in enumerate(zip(self.data, self.labels)):
                 if len(x) == 0 or len(y) == 0:
-                    continue  # 空データはスキップ
+                    continue  # skip empty data
                 x_lab = f"{self.xlabel['bottom'][0]}({self.xlabel['bottom'][1]})" if self.xlabel else 'time'
                 y_lab = f"{label['left'][0]}({label['left'][1]})" if label else f"Series{i + 1}"
                 if time_shift1 > 0:
@@ -69,7 +69,7 @@ class PlotData:
                     df = pd.DataFrame({x_lab: x, y_lab: y})
                 sheet_name = y_lab
                 print(f'{sheet_name=}')
-                # シート名が31文字超えないようにし、不正文字も除去
+                # keep the sheet name under 31 characters and strip invalid characters
                 safe_name = sheet_name[:31].replace('/', '_')
                 df.to_excel(writer, sheet_name=safe_name, index=False)
 # clean_name = re.sub(r'[()]', '', safe_name)
@@ -126,10 +126,11 @@ class PlotImageData:
         return f"PlotData({len(self.data)} series)"
 
     def to_excel(self, filename, filter=None, mark_points=None, note_df=None, save_csv=True):
-        # Scalogramの行列データはExcelシートへ書かないため、save_csv=Falseにすると
-        # そのチャンネルの実データがどこにも残らない。PlotData.to_excel()と異なり
-        # デフォルトをTrueにしている(呼び出し側のUIでもScalogram時はCheckboxを
-        # 強制ON・操作不可にして、誤ってFalseにできないようにしている)。
+        # Scalogram's matrix data is never written to an Excel sheet, so
+        # save_csv=False would leave that channel's actual data nowhere at
+        # all. Unlike PlotData.to_excel(), the default here is True (the
+        # calling UI also forces the checkbox on and disabled for Scalogram,
+        # so it can't accidentally be set to False).
         basename = os.path.splitext(filename)[0]  # 'ABC_G02'
         start = time.perf_counter()
         time_shift1 = float(mark_points[0][0]) if len(mark_points) > 0 else 0
@@ -141,7 +142,7 @@ class PlotImageData:
             csv_files = []
             for i, ((x, y, val), label) in enumerate(zip(self.data, self.labels)):
                 if len(x) == 0 or len(y) == 0 or len(val) == 0:
-                    continue  # 空データはスキップ
+                    continue  # skip empty data
 
                 print(type(x), getattr(x, 'shape', None))
                 print(type(y), getattr(y, 'shape', None))
@@ -153,14 +154,17 @@ class PlotImageData:
                 x_lab = f"{self.xlabel['bottom'][0]}({self.xlabel['bottom'][1]})" if self.xlabel else 'time'
                 sheet_name = f"{label['left'][0]}({label['left'][1]})" if label else f"Series{i + 1}"
                 df.index.name = f"{x_lab}\\freq.({label['left'][1]})"
-                # シート名が31文字超えないようにし、不正文字も除去
+                # keep the sheet name under 31 characters and strip invalid characters
                 safe_name = sheet_name[:31].replace('/', '_')
 # clean_name = re.sub(r'[()]', '', safe_name)
                 clean_name = re.sub(r'\([^)]*\)', '', safe_name)
-                # Scalogramの時間×周波数行列は数十万〜数百万セル規模になり、xlsxwriterへの
-                # セル単位書き込みはCSV書き込みの5〜6倍以上遅い(実測: 5分の記録で約30秒 vs
-                # 4秒)。Excelで閲覧するにも大きすぎる行数になるため、Excelシートへは書き込まず
-                # CSVのみに残し、どのCSVに対応するかを後で'Data'シートに一覧で示す。
+                # A Scalogram's time x frequency matrix can reach hundreds of
+                # thousands to millions of cells, and writing that
+                # cell-by-cell to xlsxwriter is 5-6x or more slower than
+                # writing CSV (measured: ~30s vs ~4s for a 5-minute
+                # recording). It would also produce far too many rows to
+                # view comfortably in Excel, so it is written only to CSV,
+                # with the 'Data' sheet listing which CSV corresponds to which channel.
                 if save_csv:
                     csv_path = f"{basename}_{clean_name}.csv"
                     df.to_csv(csv_path, index=True)
@@ -193,8 +197,8 @@ class ReadData():
     def __init__(self, args):
         self.args = args
         file = FIO.FileIO()                                                      # Instance of FileIO class
-        self.header = file.read_open(self.args.filename)  # header読込み
-        if self.header:                                                            # 全データ一括読込み
+        self.header = file.read_open(self.args.filename)  # load the header
+        if self.header:                                                            # read all data at once
             debug_print(self.args, f' With header ... Using file.fread.read()')
             all_bin_data = file.fread.read()
         else:
@@ -202,7 +206,7 @@ class ReadData():
             data_ = np.loadtxt(sys.argv[1], dtype='int', comments='#', unpack=True)
 
         for key, val in self.header.__dict__.items():
-            debug_print(self.args, f' {key:<10}={val}')  # header確認
+            debug_print(self.args, f' {key:<10}={val}')  # check the header
 
         if hasattr(self.header, 'processed_data'):
             self._load_processed_payload(all_bin_data)
@@ -212,7 +216,7 @@ class ReadData():
 
         self.board = comm.Board(self.header, self.args, False)     # Instance of Board class
 
-        # For Old version (旧versionに入っていない項目追加)
+        # For Old version (add fields missing from the old version)
         if 'struct' not in self.board.p.env_set:
             self.ForOldVersion()
             print(tr('pu.use_python38'))
@@ -224,13 +228,13 @@ class ReadData():
         debug_print(self.args, f'[INFO] one_data_size={self.board.one_data_size}')
         self.num_data = int(len(all_bin_data) / self.board.one_data_size)
 
-        self.data = np.zeros((self.num_data, 2 * len(self.board.structure)))  # data配列確保
-        for i in range(self.num_data):                # data変換(binary data -> numerical data)
+        self.data = np.zeros((self.num_data, 2 * len(self.board.structure)))  # allocate the data array
+        for i in range(self.num_data):                # convert data (binary data -> numerical data)
             self.data[i] = self.board.convert(
                 all_bin_data[i * self.board.one_data_size:(i + 1) * self.board.one_data_size])
-        # data配列の行と列を入替え
+        # transpose the data array's rows and columns
         self.data_t = self.data.T
-        # PlotData 作成
+        # create the PlotData
         self.data0 = PlotData()
         self.data0.title = 'Timeseries'
         for k, lst in enumerate(self.board.structure[1:]):
@@ -293,7 +297,8 @@ class ReadData():
         debug_print(self.args, f' ================ {self.cpt_list=}')
 
     def _load_external_excel(self):
-        # 外部excelファイルに縦線を描画したい位置とその文字列を指定(ex. 'LT' \n 300, 'PRE11'\n 250)
+        # Specify positions (and their labels) at which to draw vertical
+        # lines from an external Excel file (e.g. 'LT' \n 300, 'PRE11' \n 250)
         self.external_excel = os.path.splitext(self.args.filename)[0] + ".xlsx"
         if os.path.exists(self.external_excel):
             external_df = pd.read_excel(self.external_excel)
@@ -307,18 +312,20 @@ class ReadData():
             self.PRE_dict = None
 
     # For Old version
-    # 旧versionに入っていない項目の追加
-    # platformの仕様変更の為，読み込めない場合はpython3.8以下を使用
+    # add fields missing from the old version
+    # if it fails to load due to a platform spec change, use Python 3.8 or earlier
     def ForOldVersion(self):
-        # 現行Firmwareの対象はRaspberry Pi Pico/Pico Wのみ。ここは、それ以前に
-        # 実際にArduino Unoで記録した過去のData(.dat)を読むためだけの後方互換Codeで、
-        # 現行のHardware対応状況とは無関係(Raw Data保持のため削除しないこと)。
+        # The current firmware only targets Raspberry Pi Pico/Pico W. This is
+        # backward-compatibility code that exists solely to read old (.dat)
+        # data actually recorded on an Arduino Uno before that, and is
+        # unrelated to the current hardware support status (do not delete --
+        # needed to preserve access to that raw data).
         port_str = ','.join(str(item) for item in self.board.p.env_set['port_num'])
         time_unit = self.board.p.env_set['time_unit']
         time_byte = self.board.p.env_set['time_byte']
         data_byte = self.board.p.env_set['data_byte']
-        ADCres = self.board.p.env_set['ADCres'] = '10'       # 記録当時のArduino Unoの仕様(10bit ADC)
-        volt = self.board.p.env_set['volt'] = '5'          # 記録当時のArduino Unoの仕様(5V)
+        ADCres = self.board.p.env_set['ADCres'] = '10'       # the Arduino Uno's spec at the time of recording (10-bit ADC)
+        volt = self.board.p.env_set['volt'] = '5'          # the Arduino Uno's spec at the time of recording (5V)
         self.board.p.env_set['struct'] = f'time(u{time_byte}:func0), [({port_str})]port(u{data_byte}:func1)'
         time_bits = 8 * time_byte
         volt_coeff = float(volt) / float(2**12)
@@ -329,13 +336,16 @@ class ReadData():
         self.board.p.env_set['endian'] = 'big'
         # debug_print(self.args, f"{self.board.p.env_set['func']=}")
 
-    def makeTitle(self):                         # title設定
+    def makeTitle(self):                         # set the title
         subject = self.header.subject
         if 'birth' in subject:
-            # 被験者情報系Template(name/height/weight/birth/gender/...)。GenderのComboBoxや
-            # 生年月日のDateEditは未操作でも既定値(Male/2000-01-01等)を持つため、Nameが空なら
-            # Subjectダイアログは実質未入力とみなす(例: 何も設定していないのに
-            # 「Male(26)」のような偽のTitleが出るのを防ぐ)。
+            # The subject-info-style template (name/height/weight/birth/
+            # gender/...). The Gender ComboBox and the birth-date DateEdit
+            # both carry default values (e.g. Male/2000-01-01) even when
+            # never touched, so an empty Name is treated as meaning the
+            # Subject dialog was effectively never filled in (this avoids a
+            # bogus title like "Male(26)" showing up when nothing was
+            # actually set).
             if not str(subject.get('name', '')).strip():
                 self.title = ''
                 return
@@ -345,8 +355,10 @@ class ReadData():
                 age = subject['age']
             self.title = f"{subject['name']} {subject['gender']}({age})"
         elif subject and any(str(val).strip() for val in subject.values()):
-            # birthを持たないTemplate(LIS3DHの実験Title/実験設定/MEMO等)。全FieldがQLineEdit
-            # 相当で「未操作でも値を持つ」Widgetが無いため、何か1つでも入力されていれば表示する。
+            # A template without a birth field (e.g. LIS3DH's experiment
+            # title/settings/memo). Every field here is a QLineEdit or
+            # equivalent, with no widget that "carries a value even when
+            # untouched," so it's shown as long as at least one field has been filled in.
             self.title = ';'.join(f'{key}:{val} ' for key, val in subject.items())
         else:
             self.title = ''  # 'Plot program'
