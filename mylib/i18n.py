@@ -297,6 +297,12 @@ MESSAGES = {
     "plot.gui.select_graph_tip": {"en": "Choose which graph to draw (Ctrl+G)", "ja": "描画する図の選択(Ctrl+G)"},
     "plot.gui.info": {"en": "INFO", "ja": "情報"},
     "plot.gui.info_tip": {"en": "Show information contained in the data (Ctrl+I)", "ja": "dataに含まれる情報を表示します(Ctrl+I)"},
+    "plot.gui.full_range": {"en": "Full Range", "ja": "全範囲"},
+    "plot.gui.full_range_tip": {
+        "en": "Toggle the bottom overview's selected range between full and the "
+              "range you had selected",
+        "ja": "最下段の選択範囲を、全範囲と直前に選択していた範囲とで切り替えます",
+    },
     "plot.gui.quit": {"en": "Quit", "ja": "終了"},
     "plot.gui.quit_tip": {"en": "Quit (Ctrl+Q)", "ja": "終了します(Ctrl+Q)"},
     "plot.gui.select_port": {"en": "Select port", "ja": "ポート選択"},

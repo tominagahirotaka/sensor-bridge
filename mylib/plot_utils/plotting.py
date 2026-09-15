@@ -367,6 +367,10 @@ class RegionManager:
         self._last_range_update = 0
         self._updating = False  # 再帰的更新防止フラグ
         self._initialized = False  # ✅ 追加
+        self._data_min_x = None       # 全範囲ボタン用: データ全体のx範囲
+        self._data_max_x = None
+        self._saved_region = None     # 全範囲ボタン用: 直前に選択していた範囲
+        self._full_range_active = False
 
         # region生成・接続
         self.region = self._mk_region()
@@ -425,10 +429,27 @@ class RegionManager:
         start = min_x
         end = start + range_width * 0.7
         self.region.setRegion([start, end])
+        self._data_min_x, self._data_max_x = min_x, max_x
         self._initialized = True  # ✅ 設定完了
 
     def set_x_shift(self, shift):
         self.x_shift = shift
+
+    # -------------------------------------------------- #
+    #  全範囲表示トグル                                    #
+    # -------------------------------------------------- #
+    def toggle_full_range(self):
+        """全範囲表示 <-> 直前に選択していた範囲、を1回押すごとに切り替える。"""
+        if self._full_range_active:
+            if self._saved_region is not None:
+                self.region.setRegion(self._saved_region)
+            self._full_range_active = False
+        else:
+            if self._data_min_x is None or self._data_max_x is None:
+                return  # 初期region設定がまだ終わっていない
+            self._saved_region = self.region.getRegion()
+            self.region.setRegion([self._data_min_x, self._data_max_x])
+            self._full_range_active = True
 
     # -------------------------------------------------- #
     #  regionが動いたとき → プロットのx範囲を更新          #

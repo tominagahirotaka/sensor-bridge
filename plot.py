@@ -200,6 +200,11 @@ class MainWindow(QMainWindow):
         self.info_button.setToolTip(t('plot.gui.info_tip'))
         self.info_button.clicked.connect(self.open_info_window)
 
+        # Full Range button（最下段の選択範囲を全範囲<->直前の範囲でトグル）
+        self.full_range_button = QPushButton(t('plot.gui.full_range'))
+        self.full_range_button.setToolTip(t('plot.gui.full_range_tip'))
+        self.full_range_button.clicked.connect(self.toggle_full_range)
+
         # Quit button
         self.quit_button = QPushButton(t('plot.gui.quit'), self)
         self.quit_button.setToolTip(t('plot.gui.quit_tip'))
@@ -284,7 +289,8 @@ class MainWindow(QMainWindow):
             (self.derivatives, 0, 11, 2, 1),
             (self.label3, 0, 12, 1, 2),
             (self.info_button, 1, 12),
-            (self.quit_button, 1, 13)
+            (self.full_range_button, 1, 13),
+            (self.quit_button, 1, 14)
         ]
         for wid in widgets:
             self.control_layout.addWidget(*wid)
@@ -499,6 +505,11 @@ class MainWindow(QMainWindow):
         else:
             self.mavg_curves = pltutils.add_timeseries(self.plots, self.mavg_data)
         print(f'{value=}')
+
+    def toggle_full_range(self):
+        """最下段の選択範囲を、全範囲 <-> 直前に選択していた範囲でトグルする。"""
+        if hasattr(self, 'region_mgr'):
+            self.region_mgr.toggle_full_range()
 
     def hide_show_plot(self):
         if self.args.timeshift1 and len(self.data.cpt_list) > 0:
