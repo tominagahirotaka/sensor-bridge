@@ -133,6 +133,7 @@ class PlotImageData:
 #        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
         with pd.ExcelWriter(filename, engine='xlsxwriter') as writer:
             sheet_count = 0
+            csv_files = []
             for i, ((x, y, val), label) in enumerate(zip(self.data, self.labels)):
                 if len(x) == 0 or len(y) == 0 or len(val) == 0:
                     continue  # 空データはスキップ
@@ -149,14 +150,22 @@ class PlotImageData:
                 df.index.name = f"{x_lab}\\freq.({label['left'][1]})"
                 # シート名が31文字超えないようにし、不正文字も除去
                 safe_name = sheet_name[:31].replace('/', '_')
-                df.to_excel(writer, sheet_name=safe_name, index=True)
 # clean_name = re.sub(r'[()]', '', safe_name)
                 clean_name = re.sub(r'\([^)]*\)', '', safe_name)
-                df.to_csv(f"{basename}_{clean_name}.csv", index=True)
+                # Scalogramの時間×周波数行列は数十万〜数百万セル規模になり、xlsxwriterへの
+                # セル単位書き込みはCSV書き込みの5〜6倍以上遅い(実測: 5分の記録で約30秒 vs
+                # 4秒)。Excelで閲覧するにも大きすぎる行数になるため、Excelシートへは書き込まず
+                # CSVのみに残し、どのCSVに対応するかを後で'Data'シートに一覧で示す。
+                csv_path = f"{basename}_{clean_name}.csv"
+                df.to_csv(csv_path, index=True)
+                csv_files.append((safe_name, os.path.basename(csv_path)))
                 sheet_count += 1
 
             filter_df.to_excel(writer, sheet_name='Filter', index=False)
             title_df.to_excel(writer, sheet_name='Title', index=True, header=False)
+            if csv_files:
+                csv_index_df = pd.DataFrame(csv_files, columns=['channel', 'data file (CSV)'])
+                csv_index_df.to_excel(writer, sheet_name='Data', index=False)
             if mark_points is not None:
                 mark_df = pd.DataFrame(
                     mark_points, columns=[
