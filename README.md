@@ -149,19 +149,11 @@ and avoids coupling acquisition timing to analysis-side processing cost.
 
 ## Adding a new sensor board
 
-1. Copy the `.ini`/`_jp.ini` pair (and Arduino sketch) of the existing
-   board closest to your sensor's interface (SPI/I2C/analog) as a
-   starting point.
-2. Adjust the `[board]` section (pins, sampling parameters) and the
-   firmware's parameter negotiation (`initialSetupParam`/`changeParam`) to
-   match your sensor's register map and read routine.
-3. Adjust the `[code]` section's `figs`/`lcd`/`panel1` definitions to
-   match your sensor's channel count and units.
-4. Test against real hardware -- start with the firmware's `who_am_i` /
-   device-ID readback (if your sensor has one) before trusting any
-   acquired data, and verify the sampling-interval statistics (e.g. via
-   the Header Viewer's time-interval histogram in `plot.py`) look sane
-   for your target sampling rate.
+See [`docs/adding-a-board.md`](docs/adding-a-board.md) for the `.ini`
+section reference, the `self.board` attribute surface (captured from real
+hardware handshakes), the firmware-side handshake, and a verification
+checklist where every item corresponds to a real bug caught while adding
+a board to this repository.
 
 ## License
 
