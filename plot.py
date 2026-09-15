@@ -1069,7 +1069,12 @@ def build_wavelet_params(args) -> WaveletParams:
 def main():
     args = parse_args()
 
-    app = QApplication(sys.argv)
+    # argv[0] becomes the X11 WM_CLASS (verified via xprop); Qt's
+    # setDesktopFileName() only affects the Wayland app-id, so both are
+    # needed to match sensor-bridge-plot.desktop's StartupWMClass on either
+    # session type and get the dock/taskbar icon to show.
+    app = QApplication(['sensor-bridge-plot'] + sys.argv[1:])
+    app.setDesktopFileName('sensor-bridge-plot')
     app.setWindowIcon(QIcon('icon.png'))
     app.setApplicationName("sensor-bridge")
 

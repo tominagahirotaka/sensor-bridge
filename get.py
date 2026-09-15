@@ -22,7 +22,12 @@ from version import __version__
 def make_window(argv, args, board):
     i18n.set_language(args.lang)                  # re-apply in this (possibly spawned) process
     rcv = comm.Receive(args, board)              # data receive object
-    app = QApplication(argv)                     # ApplicationWindow object
+    # argv[0] becomes the X11 WM_CLASS (verified via xprop); Qt's
+    # setDesktopFileName() only affects the Wayland app-id, so both are
+    # needed to match sensor-bridge-get.desktop's StartupWMClass on either
+    # session type and get the dock/taskbar icon to show.
+    app = QApplication(['sensor-bridge-get'] + list(argv[1:]))
+    app.setDesktopFileName('sensor-bridge-get')
     app.setWindowIcon(QIcon('icon.png'))
     window = win.ApplicationWindow(rcv, args)  # kept alive by this ref; PyQt closes GC'd windows
     sys.exit(app.exec_())                        # ApplicationWindow excution
