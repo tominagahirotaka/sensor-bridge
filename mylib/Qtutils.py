@@ -231,6 +231,10 @@ class FigureQtPG:
         self.next_loop = False
         self.num_of_loop = 0
         self.top_args = args
+        # Test/Run/caliBrateが押されるたびにPico側の経過時間は0付近から数え直される。
+        # self(FigureQtPG)はget.py起動中ずっと使い回される(initCanvas()は1回しか
+        # 呼ばれない)ため、これで「時間が巻き戻った」検出を行いPeak検出状態をリセットする。
+        self._last_seen_time = float('-inf')
         print(f"{args=}")
 
         pg.setConfigOptions(antialias=False, useOpenGL=False)  # まず安定優先
@@ -461,6 +465,18 @@ class FigureQtPG:
             for lst in self.figs]
         self._fs_fixed = True
 
+    def _reset_peak_detection_state(self):
+        """Test/Run/caliBrateの再開始でPico側の経過時間が巻き戻った際に、
+        Peak検出関連のバッファ(履歴・閾値・直近peak時刻/間隔)を初期状態へ戻す。"""
+        for k, lst in enumerate(self.figs):
+            for j, dic in enumerate(lst):
+                for i, dat in enumerate(dic['data']):
+                    self._peak_history_x[k][j][i].clear()
+                    self._peak_history_y[k][j][i].clear()
+                    self.average[k][j][i] = 0.0
+                    self.peak_time[k][j][i][:] = 0.0
+                    self.peak_interval[k][j][i] = 0.0
+
     def update(self, stream):
         data_t = next(stream).transpose()
 
@@ -468,6 +484,13 @@ class FigureQtPG:
         if not self._fs_fixed:
             dt = (data_t[0][-1] - data_t[0][0]) / (data_t.shape[1] - 1)
             self._init_buffers(dt)
+        elif data_t[0][-1] < self._last_seen_time - 1.0:
+            # Test/Run/caliBrateが再度押され、Pico側の経過時間が0付近から数え直された。
+            # 履歴バッファをクリアしないと、前回セッションの(スケールの異なる)古い
+            # タイムスタンプが新しいものと混在し、min_peak_distanceの算出が壊れて
+            # 負値になる等、Peak検出が数秒間デタラメになってしまう。
+            self._reset_peak_detection_state()
+        self._last_seen_time = data_t[0][-1]
 
         lp_tmp = int(data_t[0][-1] / self.board.time_width)
         if lp_tmp == self.num_of_loop:
