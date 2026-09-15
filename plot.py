@@ -510,12 +510,13 @@ class MainWindow(QMainWindow):
         print(f'{value=}')
 
     def toggle_full_range(self):
-        """最下段の選択範囲を、全範囲 <-> 直前に選択していた範囲でトグルする。"""
-        if hasattr(self, 'region_mgr'):
-            is_full = self.region_mgr.toggle_full_range()
-            self.full_range_button.setChecked(is_full)  # Background色をregion_mgrの実際の状態に同期
-        else:
-            self.full_range_button.setChecked(False)  # region_mgr不在ならOFF状態を維持
+        """最下段の選択範囲を、全範囲 <-> 直前に選択していた範囲でトグルする。
+        上部ツールバーのボタンと最下段グラフ左の"F"ボタン、どちらから押されても
+        両方のBackground色(checked状態)をregion_mgrの実際の状態に同期させる。"""
+        is_full = self.region_mgr.toggle_full_range() if hasattr(self, 'region_mgr') else False
+        self.full_range_button.setChecked(is_full)
+        if hasattr(self, 'plots') and hasattr(self.plots, 'full_range_button'):
+            self.plots.full_range_button.setChecked(is_full)
 
     def hide_show_plot(self):
         if self.args.timeshift1 and len(self.data.cpt_list) > 0:
@@ -676,6 +677,9 @@ class MainWindow(QMainWindow):
         # グラフを作り直すとregion_mgrも新規になり全範囲表示状態はリセットされるため、
         # ボタンの見た目(checked状態のBackground色)もそれに合わせて戻す。
         self.full_range_button.setChecked(False)
+        # InitPlots()は毎回新しいFull Rangeボタン(最下段グラフ左の"F")を作るため、
+        # そのたびに接続し直す必要がある。
+        self.plots.full_range_button.clicked.connect(self.toggle_full_range)
         if self.graph_id in image_lst:    # ImageItem (Scalogram)
             # 前回がPlotItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
             for stale in ('curves', 'p_base_plot', 'derivative_curves', 'peaks', 'valleys',

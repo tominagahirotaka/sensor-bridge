@@ -7,6 +7,7 @@ import time
 import numpy as np
 import pyqtgraph as pg
 import scipy.signal as signal
+from PyQt5.QtWidgets import QGraphicsProxyWidget, QPushButton
 from pyqtgraph.Qt import QtCore
 
 from mylib.i18n import t as tr
@@ -23,15 +24,32 @@ from mylib.plot_utils.reading import PlotData
 class InitPlots:
     def __init__(self, win, num_plots):
         self.title = ''
-        self.label = mk_label(win, layout=[0, 0, 1], justify='left')  # right')  # make label
+        # col=0はFull Rangeボタン専用の細いgutter列として空けておき、実際のプロット群は
+        # col=1から配置する(mk_label/mk_plotとも第2要素がcol)。
+        self.label = mk_label(win, layout=[0, 1, 1], justify='left')  # right')  # make label
         self.plts, self.plts_right = [], []
         for i in range(num_plots):
-            p1 = mk_plot(win, layout=[i + 1, 0, 4])
+            p1 = mk_plot(win, layout=[i + 1, 1, 4])
             p2 = add_right_axis(p1)
             self.plts.append(p1)
             self.plts_right.append(p2)
         self.color = COLORS[:num_plots]
-        self.p_base = mk_plot(win, layout=[num_plots + 1, 0, 1])
+        self.p_base = mk_plot(win, layout=[num_plots + 1, 1, 1])
+        # 目盛りの数値自体は意味を持たない(概観用)ので非表示にする。ただしhideAxisで
+        # 軸領域ごと消すとp1/p2とのY軸幅が揃わず、上のグラフ群とX軸がズレて見えるため、
+        # 目盛りの値の表示だけを消し、軸の占有幅はそのまま残す。
+        self.p_base.getAxis('left').setStyle(showValues=False)
+
+        # 最下段(p_base)左の空きスペースにFull Range切替ボタンを置く。押しやすさ向上のため
+        # 上部ツールバーのFull Rangeボタンと隣接させた操作性向上の要望に対応。
+        self.full_range_button = QPushButton("F")
+        self.full_range_button.setFixedWidth(24)
+        self.full_range_button.setCheckable(True)
+        self.full_range_button.setStyleSheet(
+            "QPushButton:checked { background-color: #ffca28; }")
+        proxy = QGraphicsProxyWidget()
+        proxy.setWidget(self.full_range_button)
+        win.addItem(proxy, row=num_plots + 1, col=0)
 
     def __getitem__(self, idx):
         return self.plts[idx]

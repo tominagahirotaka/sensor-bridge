@@ -250,7 +250,7 @@ def add_right_axis(p1, label="Derivatives", color='g'):
 
 def mk_label(win, layout, justify):
     label = pg.LabelItem(justify=justify)
-    win.addItem(label)
+    win.addItem(label, row=layout[0], col=layout[1])
     win.ci.layout.setRowStretchFactor(layout[0], layout[2])  # set StretchFactor
     return label
 
