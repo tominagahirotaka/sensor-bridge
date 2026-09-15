@@ -117,6 +117,17 @@ Code paths that require a physically connected Pico (the serial
 handshake against real firmware, sensor register-level correctness) are
 not covered by this suite and still need manual hardware testing.
 
+`scripts/measure_timing_jitter.py` measures device-side sampling-interval
+jitter (coefficient of variation) from your own recorded `.dat` files,
+using the same decoding path as `plot.py`:
+
+```bash
+python3 scripts/measure_timing_jitter.py --markdown data/*.dat data_LIS3DH/*.dat
+```
+
+This does not ship sample recordings (board data is intentionally not
+versioned), so it needs recordings of your own to run against.
+
 ## File format
 
 A recording is saved as a `.dat` (binary samples, pickled header) plus a
