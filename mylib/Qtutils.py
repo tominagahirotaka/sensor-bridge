@@ -225,6 +225,7 @@ class FigureQtPG:
     PEAK_HISTORY_WINDOW_SEC = 2.0  # Peak検出用の履歴バッファが保持する秒数
     PEAK_LOCAL_WIDTH = 2  # find_peaksのlocal_width。境界除外幅としても使う
     AVERAGE_TIME_CONSTANT_SEC = 3.0  # Peak検出の閾値(self.average)に使う移動平均の時定数
+    PEAK_TIME_BUFFER_SIZE = 7  # peak_interval算出に使う直近Peak時刻の保持数
 
     def __init__(self, board, figs, args):
         self.board = board
@@ -323,7 +324,7 @@ class FigureQtPG:
         self._buf_y = []
 
         # peak_time / peak_interval / average
-        self.peak_time = [[[np.zeros(3) for _ in dic['data']]
+        self.peak_time = [[[np.zeros(self.PEAK_TIME_BUFFER_SIZE) for _ in dic['data']]
                            for dic in lst] for lst in self.figs]
         self.peak_interval = np.array([[[0.0 for _ in dic['data']]
                                         for dic in lst] for lst in self.figs])
@@ -621,13 +622,18 @@ class FigureQtPG:
                 p_idx = p_idxs[-1]
                 # PEAK_HISTORYがdeque(maxlen)である以上この分岐はバッファが埋まった
                 # 後も毎サンプル真になるため、「新しいPeakかどうか」をここで判定しない
-                # と、同一Peakを毎回再検出してpeak_time(直近3件)の履歴を重複で埋め潰し、
-                # peak_interval(ひいては心拍数)が実際より大幅に短く算出されてしまう。
+                # と、同一Peakを毎回再検出してpeak_time(直近PEAK_TIME_BUFFER_SIZE件)の
+                # 履歴を重複で埋め潰し、peak_interval(ひいては心拍数)が実際より
+                # 大幅に短く算出されてしまう。
                 if hx[p_idx] > self.peak_time[k][j][i][-1]:
                     peak_x = hx[p_idx] % self.board.time_width
                     peak_y = hy[p_idx]
                     self.peak_time[k][j][i][:-1] = self.peak_time[k][j][i][1:]
                     self.peak_time[k][j][i][-1] = hx[p_idx]
-                    self.peak_interval[k][j][i] = np.average(
+                    # dicrotic notch等、脈波の副次的な山を別Peakとして単発で誤検出
+                    # した場合、その1件だけがdiffを大きく歪める。単純平均だと
+                    # HBR表示がその1件に引っ張られ「時々倍になる」ような揺らぎに
+                    # 直結するため、外れ値に強い中央値を使う。
+                    self.peak_interval[k][j][i] = np.median(
                         np.diff(self.peak_time[k][j][i]))
                     self.peaks[k][j][i].setData(x=[peak_x], y=[peak_y])
