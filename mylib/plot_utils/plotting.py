@@ -44,6 +44,7 @@ class InitPlots:
         # 上部ツールバーのFull Rangeボタンと隣接させた操作性向上の要望に対応。
         self.full_range_button = QPushButton("F")
         self.full_range_button.setFixedWidth(24)
+        self.full_range_button.setToolTip(tr('plot.gui.full_range_tip'))
         self.full_range_button.setCheckable(True)
         self.full_range_button.setStyleSheet(
             "QPushButton:checked { background-color: #ffca28; }")
