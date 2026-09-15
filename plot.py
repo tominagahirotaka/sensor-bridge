@@ -203,6 +203,9 @@ class MainWindow(QMainWindow):
         # Full Range button（最下段の選択範囲を全範囲<->直前の範囲でトグル）
         self.full_range_button = QPushButton(t('plot.gui.full_range'))
         self.full_range_button.setToolTip(t('plot.gui.full_range_tip'))
+        self.full_range_button.setCheckable(True)  # 全範囲表示中はBackground色を変えて視認性を上げる
+        self.full_range_button.setStyleSheet(
+            "QPushButton:checked { background-color: #ffca28; }")
         self.full_range_button.clicked.connect(self.toggle_full_range)
 
         # Quit button
@@ -278,18 +281,18 @@ class MainWindow(QMainWindow):
             (self.label2, 2, 6, 1, 5),
             (self.file_write_button, 1, 1),
             (self.smoothing_button, 1, 2),
-            (self.graph_sel_button, 1, 3),
-            (self.peaks_check, 1, 4),
-            (self.mark_check, 1, 5),
-            (self.LT_check, 1, 6),
-            (self.PRE_check, 1, 7),
-            (self.port_selection, 0, 8, 2, 1),
-            (self.time_shift, 0, 9, 2, 1),
-            (self.shift_layout, 0, 10, 2, 1),
-            (self.derivatives, 0, 11, 2, 1),
-            (self.label3, 0, 12, 1, 2),
-            (self.info_button, 1, 12),
-            (self.full_range_button, 1, 13),
+            (self.full_range_button, 1, 3),
+            (self.graph_sel_button, 1, 4),
+            (self.peaks_check, 1, 5),
+            (self.mark_check, 1, 6),
+            (self.LT_check, 1, 7),
+            (self.PRE_check, 1, 8),
+            (self.port_selection, 0, 9, 2, 1),
+            (self.time_shift, 0, 10, 2, 1),
+            (self.shift_layout, 0, 11, 2, 1),
+            (self.derivatives, 0, 12, 2, 1),
+            (self.label3, 0, 13, 1, 2),
+            (self.info_button, 1, 13),
             (self.quit_button, 1, 14)
         ]
         for wid in widgets:
@@ -509,7 +512,10 @@ class MainWindow(QMainWindow):
     def toggle_full_range(self):
         """最下段の選択範囲を、全範囲 <-> 直前に選択していた範囲でトグルする。"""
         if hasattr(self, 'region_mgr'):
-            self.region_mgr.toggle_full_range()
+            is_full = self.region_mgr.toggle_full_range()
+            self.full_range_button.setChecked(is_full)  # Background色をregion_mgrの実際の状態に同期
+        else:
+            self.full_range_button.setChecked(False)  # region_mgr不在ならOFF状態を維持
 
     def hide_show_plot(self):
         if self.args.timeshift1 and len(self.data.cpt_list) > 0:
@@ -667,6 +673,9 @@ class MainWindow(QMainWindow):
         self.win.clear()
         self.plots.remove_right_axes()
         self.plots = pltutils.InitPlots(self.win, self.num_plots)
+        # グラフを作り直すとregion_mgrも新規になり全範囲表示状態はリセットされるため、
+        # ボタンの見た目(checked状態のBackground色)もそれに合わせて戻す。
+        self.full_range_button.setChecked(False)
         if self.graph_id in image_lst:    # ImageItem (Scalogram)
             # 前回がPlotItem系Graphだった場合の残骸を消す(hide_show_plot()のhasattr判定用)。
             for stale in ('curves', 'p_base_plot', 'derivative_curves', 'peaks', 'valleys',

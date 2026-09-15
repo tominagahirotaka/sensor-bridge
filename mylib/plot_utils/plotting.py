@@ -439,17 +439,19 @@ class RegionManager:
     #  全範囲表示トグル                                    #
     # -------------------------------------------------- #
     def toggle_full_range(self):
-        """全範囲表示 <-> 直前に選択していた範囲、を1回押すごとに切り替える。"""
+        """全範囲表示 <-> 直前に選択していた範囲、を1回押すごとに切り替える。
+        戻り値: 切り替え後、全範囲表示中であればTrue(呼び出し側でボタンの見た目同期に使う)。"""
         if self._full_range_active:
             if self._saved_region is not None:
                 self.region.setRegion(self._saved_region)
             self._full_range_active = False
         else:
             if self._data_min_x is None or self._data_max_x is None:
-                return  # 初期region設定がまだ終わっていない
+                return False  # 初期region設定がまだ終わっていない
             self._saved_region = self.region.getRegion()
             self.region.setRegion([self._data_min_x, self._data_max_x])
             self._full_range_active = True
+        return self._full_range_active
 
     # -------------------------------------------------- #
     #  regionが動いたとき → プロットのx範囲を更新          #
