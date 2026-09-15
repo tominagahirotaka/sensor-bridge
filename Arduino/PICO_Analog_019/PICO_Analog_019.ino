@@ -81,7 +81,7 @@ void loop() {
   string input;
   char ch;
   if (Serial.available() > 0) {
-    ch = Serial.read(); Serial.print("ch=");Serial.println(ch);
+    ch = Serial.read();
     switch (ch) {
       case 'i': // Initialize
       case 'a': // Initialize Again
