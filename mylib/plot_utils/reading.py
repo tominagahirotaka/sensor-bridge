@@ -157,8 +157,14 @@ class PlotImageData:
 
             filter_df.to_excel(writer, sheet_name='Filter', index=False)
             title_df.to_excel(writer, sheet_name='Title', index=True, header=False)
+            if mark_points is not None:
+                mark_df = pd.DataFrame(
+                    mark_points, columns=[
+                        'real time', 'time'], index=range(
+                        1, len(mark_points) + 1))
+                mark_df.to_excel(writer, sheet_name='mark points', index=True, header=True)
             if note_df is not None:
-                note_df.to_excel(writer, sheet_name='Note', index=True, header=True)
+                note_df.to_excel(writer, sheet_name='Note', index=True, header=False)
 
             if sheet_count == 0:
                 raise ValueError(
