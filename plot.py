@@ -488,14 +488,36 @@ class MainWindow(QMainWindow):
         # 保存ダイアログを挟むことで、保存先の確認と、既存ファイルへの上書き確認
         # (Qt標準機能)の両方が働くようにする。
         default_name = f'{self.fname}_G{self.graph_id:02}.xlsx'
-        options = QFileDialog.Options()
-        excelfile, _ = QFileDialog.getSaveFileName(
-            self, t('plot.gui.save_graph_dialog_title'), default_name,
-            "Excel Files (*.xlsx)", options=options)
-        if not excelfile:
+        is_image = self.graph_id in image_lst  # ImageItem (Scalogram)
+
+        dialog = QFileDialog(self, t('plot.gui.save_graph_dialog_title'), default_name,
+                             "Excel Files (*.xlsx)")
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        # CSV保存有無のCheckboxを追加するにはネイティブダイアログを使えないため無効化する。
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        csv_checkbox = QCheckBox(t('plot.gui.save_csv_checkbox'))
+        if is_image:
+            # Scalogramは行列データをExcelシートへ書かず(重いため)CSVのみに保存する
+            # 設計になっているため、CSVを無効にすると実データがどこにも残らない。
+            # そのためScalogramの場合だけCSVを強制ONにし、Checkbox自体も操作不可にする。
+            csv_checkbox.setChecked(True)
+            csv_checkbox.setEnabled(False)
+            csv_checkbox.setToolTip(t('plot.gui.save_csv_checkbox_forced_tip'))
+        else:
+            csv_checkbox.setChecked(False)  # Default: 保存しない
+            csv_checkbox.setToolTip(t('plot.gui.save_csv_checkbox_tip'))
+        layout = dialog.layout()
+        layout.addWidget(csv_checkbox, layout.rowCount(), 0, 1, layout.columnCount())
+
+        if dialog.exec_() != QFileDialog.Accepted:
             return  # キャンセルされた場合は何もしない
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+        excelfile = selected[0]
         if not excelfile.lower().endswith('.xlsx'):
             excelfile += '.xlsx'
+        save_csv = csv_checkbox.isChecked()
 
         mark_points = self.data.header.time['check_points']
         if self.data.LT_dict is not None and self.data.PRE_dict is not None:
@@ -503,10 +525,10 @@ class MainWindow(QMainWindow):
         else:
             note_df = None
 
-        if self.graph_id in image_lst:    # ImageItem (Scalogram)
-            self.image_data.to_excel(excelfile, self.filter, mark_points, note_df)
+        if is_image:
+            self.image_data.to_excel(excelfile, self.filter, mark_points, note_df, save_csv=save_csv)
         else:
-            self.plot_data.to_excel(excelfile, self.filter, mark_points, note_df)
+            self.plot_data.to_excel(excelfile, self.filter, mark_points, note_df, save_csv=save_csv)
 
     def control_moving_average(self, value):
         self.mavg_data = pltutils.do_ma(self.plot_data, value)

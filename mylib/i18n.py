@@ -271,6 +271,20 @@ MESSAGES = {
         "en": "Save Graph Data",
         "ja": "グラフDataの保存先",
     },
+    "plot.gui.save_csv_checkbox": {
+        "en": "Also save CSV files",
+        "ja": "CSVファイルも保存する",
+    },
+    "plot.gui.save_csv_checkbox_tip": {
+        "en": "Also write each series to a separate .csv file next to the Excel file",
+        "ja": "各シリーズを、Excelファイルと同じ場所に別途.csvとしても保存します",
+    },
+    "plot.gui.save_csv_checkbox_forced_tip": {
+        "en": "Scalogram's data matrix is not written into the Excel sheet (too slow "
+              "for large data), so CSV is the only place it's saved -- always on",
+        "ja": "Scalogramのデータ行列はExcelシートに書き込まない(大きいと非常に遅いため)"
+              "ため、CSVが唯一の保存先です。常にONになります",
+    },
     "plot.selected_graph": {
         "en": "[INFO] Selected graph: {graph}",
         "ja": "[INFO] 選択したGraph: {graph}",

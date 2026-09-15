@@ -48,7 +48,7 @@ class PlotData:
     def __repr__(self):
         return f"PlotData({len(self.data)} series)"
 
-    def to_excel(self, filename, filter=None, mark_points=None, note_df=None):
+    def to_excel(self, filename, filter=None, mark_points=None, note_df=None, save_csv=False):
         basename = os.path.splitext(filename)[0]  # 'ABC_G02'
         start = time.perf_counter()
         time_shift1 = float(mark_points[0][0]) if len(mark_points) > 0 else 0
@@ -73,8 +73,9 @@ class PlotData:
                 safe_name = sheet_name[:31].replace('/', '_')
                 df.to_excel(writer, sheet_name=safe_name, index=False)
 # clean_name = re.sub(r'[()]', '', safe_name)
-                clean_name = re.sub(r'\([^)]*\)', '', safe_name)
-                df.to_csv(f"{basename}_{clean_name}.csv", index=False)
+                if save_csv:
+                    clean_name = re.sub(r'\([^)]*\)', '', safe_name)
+                    df.to_csv(f"{basename}_{clean_name}.csv", index=False)
                 sheet_count += 1
 
             filter_df.to_excel(writer, sheet_name='Filter', index=False)
@@ -124,7 +125,11 @@ class PlotImageData:
     def __repr__(self):
         return f"PlotData({len(self.data)} series)"
 
-    def to_excel(self, filename, filter=None, mark_points=None, note_df=None):
+    def to_excel(self, filename, filter=None, mark_points=None, note_df=None, save_csv=True):
+        # Scalogramの行列データはExcelシートへ書かないため、save_csv=Falseにすると
+        # そのチャンネルの実データがどこにも残らない。PlotData.to_excel()と異なり
+        # デフォルトをTrueにしている(呼び出し側のUIでもScalogram時はCheckboxを
+        # 強制ON・操作不可にして、誤ってFalseにできないようにしている)。
         basename = os.path.splitext(filename)[0]  # 'ABC_G02'
         start = time.perf_counter()
         time_shift1 = float(mark_points[0][0]) if len(mark_points) > 0 else 0
@@ -156,10 +161,11 @@ class PlotImageData:
                 # セル単位書き込みはCSV書き込みの5〜6倍以上遅い(実測: 5分の記録で約30秒 vs
                 # 4秒)。Excelで閲覧するにも大きすぎる行数になるため、Excelシートへは書き込まず
                 # CSVのみに残し、どのCSVに対応するかを後で'Data'シートに一覧で示す。
-                csv_path = f"{basename}_{clean_name}.csv"
-                df.to_csv(csv_path, index=True)
-                csv_files.append((safe_name, os.path.basename(csv_path)))
-                sheet_count += 1
+                if save_csv:
+                    csv_path = f"{basename}_{clean_name}.csv"
+                    df.to_csv(csv_path, index=True)
+                    csv_files.append((safe_name, os.path.basename(csv_path)))
+                    sheet_count += 1
 
             filter_df.to_excel(writer, sheet_name='Filter', index=False)
             title_df.to_excel(writer, sheet_name='Title', index=True, header=False)
