@@ -16,3 +16,5 @@ data_*/
 # arduino-cli build cache (intermediates for Arduino/*/*.ino; the committed
 # top-level *.ino.rpipico.uf2 files are the actual build output we keep)
 Arduino/*/build/
+
+.pytest_cache/

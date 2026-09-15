@@ -96,6 +96,23 @@ Excel/CSV export. Run `python plot.py --help` for the full option list
 (graph type, wavelet parameters, moving-average window, overlay toggles,
 etc.).
 
+## Testing
+
+The suite under `tests/` covers the pure-logic and PyQt5/pyqtgraph-backed
+modules that don't require actual hardware (protocol parsing, signal
+filters, the live peak-detection pipeline, histogram binning, i18n
+catalog completeness, and a few GUI helper/data-model functions), run
+headless via `QT_QPA_PLATFORM=offscreen`:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Code paths that require a physically connected Pico (the serial
+handshake against real firmware, sensor register-level correctness) are
+not covered by this suite and still need manual hardware testing.
+
 ## File format
 
 A recording is saved as a `.dat` (binary samples, pickled header) plus a
