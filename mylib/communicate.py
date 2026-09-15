@@ -74,8 +74,8 @@ class ReceiveCommon:
             # configparser.read() silently reads nothing (an empty dict)
             # instead of raising when the given file doesn't exist, so
             # forgetting the .ini extension silently disables -i entirely
-            # (e.g. `-i DPG_X95840Wpeak` looks for a nonexistent
-            # 'DPG_X95840Wpeak' instead of 'DPG_X95840Wpeak.ini', and the
+            # (e.g. `-i MyBoard` looks for a nonexistent
+            # 'MyBoard' instead of 'MyBoard.ini', and the
             # program starts with nothing overridden).
             init_path = args.init if os.path.isfile(args.init) else i18n.resolve_localized_path(
                 args.init if args.init.endswith('.ini') else args.init + '.ini')

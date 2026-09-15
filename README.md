@@ -40,8 +40,7 @@ UI) plus a matching sketch under `Arduino/`.
 | `LIS3DH` | LIS3DH 3-axis accelerometer (SPI) |
 | `SHT35` | Sensirion SHT35 temperature & humidity (I2C) |
 | `Analog` | Generic analog input (e.g. a custom photoplethysmography front-end read via the Pico's ADC) |
-| `DPG_MCP4018` | MCP4018 digital-potentiometer-based device |
-| `DPG_X95840W` / `DPG_X95840Wpeak` / `DPG_X95840Wnopeak` | X95840W digital-potentiometer-based device, with/without live peak (heart-rate-style) detection |
+| `DPG_X95840W` | X95840W digital-potentiometer-based device, with live peak (heart-rate-style) detection |
 | `DPG_X95840W_LIS3DHx2` | DPG_X95840W combined with two LIS3DH accelerometers |
 | `default` | Fallback generic analog config |
 
@@ -81,7 +80,7 @@ firmware self-report, and opens one window per board using the matching
 `<name>.ini`. Useful options:
 
 ```bash
-python get.py -i DPG_X95840Wpeak   # load an additional/override .ini on top of the auto-detected one
+python get.py -i <name>             # load an additional/override .ini on top of the auto-detected one
 python get.py -lang ja             # Japanese UI
 python get.py -d                   # verbose --Debug diagnostics
 python get.py --help

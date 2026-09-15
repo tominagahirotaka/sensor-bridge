@@ -1,2 +1,5 @@
-{"2e8a:00c0":"Raspberry Pi Pico",
- "2e8a:000a":"Raspberry Pi Pico"}
+{"2e8a:000a": "Raspberry Pi Pico",
+ "2e8a:00c0": "Raspberry Pi Pico (early/legacy revision)",
+ "2e8a:f00a": "Raspberry Pi Pico W",
+ "2e8a:000f": "Raspberry Pi Pico 2",
+ "2e8a:f00f": "Raspberry Pi Pico 2 W"}

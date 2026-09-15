@@ -116,12 +116,12 @@ MESSAGES = {
     "comm.additional_init_not_found": {
         "en": "[ERROR] -i/--init file {init!r} not found (also tried {tried!r}); "
               "it had NO EFFECT -- check the filename (a bare board name needs a "
-              "matching '<name>.ini' file, e.g. -i DPG_X95840Wpeak needs "
-              "DPG_X95840Wpeak.ini in the current directory)",
+              "matching '<name>.ini' file, e.g. -i MyBoard needs "
+              "MyBoard.ini in the current directory)",
         "ja": "[ERROR] -i/--init のファイル{init!r}が見つかりません（{tried!r}も試しました）。"
               "設定は何も反映されていません。ファイル名を確認してください"
-              "（例: -i DPG_X95840Wpeak を使うには、カレントディレクトリに"
-              "DPG_X95840Wpeak.ini が必要です）",
+              "（例: -i MyBoard を使うには、カレントディレクトリに"
+              "MyBoard.ini が必要です）",
     },
     "comm.not_writing": {
         "en": "[INFO] Not writing",

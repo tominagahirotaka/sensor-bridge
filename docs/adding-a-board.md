@@ -27,9 +27,13 @@ below.
    conversion) definitions, which get merged into `env_set` too.
 
 `-i/--init <name>` loads an *additional* `.ini` on top of the auto-detected
-one (`self.p.env_set.update(...)`, `self.code.update(...)`) -- this is how
-`DPG_X95840Wpeak.ini` layers peak-detection UI on top of the base
-`DPG_X95840W.ini` without duplicating everything.
+one (`self.p.env_set.update(...)`, `self.code.update(...)`) -- useful for
+layering a small variant (e.g. a different plot style or an extra debug
+panel) on top of a board's base config without duplicating the whole file.
+(Until peak detection was stabilized, `DPG_X95840Wpeak.ini` used to layer
+peak-detection UI on top of a peak-disabled `DPG_X95840W.ini` this way; now
+that peak detection is reliable, it has been merged into the single
+`DPG_X95840W.ini`.)
 
 ## `.ini` sections
 
