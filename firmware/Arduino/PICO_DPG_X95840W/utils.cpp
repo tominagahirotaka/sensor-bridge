@@ -37,11 +37,23 @@ bool i2c_read_crc8(TwoWire wire, uint8_t addr, vector<uint16_t>& vec, uint16_t n
 //
 // For Calibrating
 //
-void tuning(vector<uint16_t> range, vector<uint16_t> range_max, vector<uint16_t> range_min, vector<int>& val) {
-  for (uint8_t i=0; i<val.size(); i++) {
-    if (range[i] > range_max[i]) val[i] = (val[i]<=10)  ? 10: val[i]-2;  //(3*val[i]/4);
-    if (range[i] < range_min[i]) val[i] = (val[i]>=255)? 255: val[i]+2; //(255-val[i])/4+val[i];
-  }
+// Bisection-search calibration step for one channel. `val` is adjusted
+// toward the [range_min, range_max] target band based on the just-measured
+// `range`, and the caller's [lo, hi] search interval narrows every call
+// (the same monotonic assumption the old fixed-step version made: too-big
+// range -> lower val; too-small range -> raise val). This converges in at
+// most 8 calls across the full 0-255 range, versus the fixed +/-2 step it
+// replaces, which could take over 100 calls to reach a distant target.
+// Returns true once `range` is within the target band, or once the search
+// interval has collapsed (lo > hi: no reachable value hits the target, so
+// calibration stops adjusting this channel rather than looping forever).
+bool tuning_step(uint16_t range, uint16_t range_max, uint16_t range_min,
+                  int& val, int& lo, int& hi) {
+  if (range >= range_min && range <= range_max) return true;
+  if (range > range_max) hi = val - 1; else lo = val + 1;
+  if (lo > hi) return true;
+  val = (lo + hi) / 2;
+  return false;
 }
 
 void analog_read(vector<int>& indx, uint16_t *sig, uint8_t ch, uint8_t avg) {

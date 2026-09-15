@@ -17,6 +17,8 @@ vector<int> indx, i2c_pinno, i2c_addr;
 vector<float> amp_max, tuning_width;
 uint8_t  numCh, num_avg, time_unit, dpm_tmp;
 uint16_t signal_max, calib_int_msec, calib_waiting;
+uint8_t  calib_max_iters;
+uint16_t calib_settle_tol;
 uint32_t time_interval, calib_interval;
 vector<int> dpm(3, 0x7F), dpm0(3, 0xFF); // !!Can not set initial value 127 (digital potentio-meter value 0--255)
 vector<uint16_t> range={0,0,0}, range_max={0,0,0}, range_min={0,0,0};
@@ -42,6 +44,8 @@ void initialSetupParam(char ch, string str){
   calib_waiting  = get_int(params,        "calib_waiting", 800);  //delay time:                   default 800msec
   calib_int_msec = get_int(params,        "calib_int_msec", 4000); //max&min search time interval: default 4000msec
   calib_interval = calib_int_msec * ((time_unit == 6) ? 1000 : 1);
+  calib_max_iters = get_int(params,       "calib_max_iters", 10); // bisection steps per calibration run
+  calib_settle_tol = get_int(params,      "calib_settle_tol", 30); // ADC counts: consecutive probes within this much count as "settled"
   //
   // setting variables
   //
@@ -103,41 +107,114 @@ void changeParam(char ch){
   serial_print_separate(join_dict(params, ";", "=")); //Serial.flush();  delay(10);
 }
 
+// Blocks (streaming samples throughout, staying responsive to new serial
+// commands) until two consecutive short probe windows agree on every
+// not-yet-converged channel's signal range within calib_settle_tol ADC
+// counts, or until calib_waiting has elapsed. Real hardware showed a
+// nonzero, not precisely known lag between an I2C write to the
+// potentiometer and its effect stabilizing in the measured signal, so
+// this checks for stability directly instead of trusting one fixed
+// guessed delay. Returns false only if a new serial command interrupted
+// the wait (the caller should abort, same as everywhere else in this
+// file); running out of time without stabilizing is not an error --
+// calibration proceeds with whatever the last probe read.
+bool wait_for_settle(uint32_t tm, bool done[3]) {
+  uint16_t prev_range[3];
+  bool have_prev = false;
+  uint32_t probe_len = calib_interval / 4;
+  uint32_t probe_floor = (time_unit == 6) ? 200000UL : 200UL; // >= 0.2s/probe
+  if (probe_len < probe_floor) probe_len = probe_floor;
+  uint32_t elapsed = 0;
+
+  while (elapsed < calib_waiting) {
+    uint16_t pmax[3], pmin[3];
+    for (uint8_t i=0; i<dpm.size(); i++) { pmax[i] = 0; pmin[i] = UINT16_MAX; }
+    uint32_t p0 = (time_unit == 6)?micros():millis(), p1 = p0;
+    while ((p1 - p0) < probe_len) {
+      if (Serial.available() > 0) { Serial.flush(); return false; }
+      exact_waiting(waiting_time0 + real_time_interval);
+      waiting_time0 = micros();
+      analog_read(indx, usig.sig, numCh, num_avg);
+      for (uint8_t i=0; i<dpm.size(); i++) {
+        usig.binary[numCh*2 + i] = dpm[i];
+        if (pmax[i] < usig.sig[i]) pmax[i] = usig.sig[i];
+        if (pmin[i] > usig.sig[i]) pmin[i] = usig.sig[i];
+      }
+      bin_write(p1-tm, usig.binary, 2*numCh + dpm.size());
+      p1 = (time_unit == 6)?micros():millis();
+    }
+    bool stable = have_prev;
+    for (uint8_t i=0; i<dpm.size(); i++) {
+      if (done[i]) continue;
+      uint16_t r = pmax[i] - pmin[i];
+      int32_t d = (int32_t)r - (int32_t)prev_range[i];
+      if (have_prev && (d > (int32_t)calib_settle_tol || d < -(int32_t)calib_settle_tol)) stable = false;
+      prev_range[i] = r;
+    }
+    have_prev = true;
+    elapsed += probe_len;
+    if (stable) return true;
+  }
+  return true; // timed out waiting for stability; proceed with a best-effort reading
+}
+
+// Runs a full bisection-search calibration to completion (up to
+// calib_max_iters rounds) in a single 'c' command, instead of requiring
+// the host to press caliBrate repeatedly for one +/-2 step at a time.
+// Each round: wait_for_settle() after any dpm change, then measure each
+// channel's signal range over calib_interval (long enough to span several
+// pulse periods for a trustworthy peak-to-peak reading), then take one
+// tuning_step() per not-yet-converged channel. Streams samples throughout
+// every phase, so the host's live plot/LCD readouts keep updating for the
+// whole run. Also tracks the closest-to-target reading ever seen per
+// channel, and falls back to it if bisection exhausts its search range
+// or calib_max_iters is reached without landing in the target band --
+// so a single noisy/motion-artifact measurement can't strand the
+// potentiometer somewhere worse than the best value actually observed.
 void calibrating(uint32_t tm) {
   uint32_t t0, t1;
   uint16_t sigmax[3],sigmin[3];
+  int lo[3] = {0, 0, 0}, hi[3] = {255, 255, 255};
+  bool done[3] = {false, false, false};
+  bool have_best[3] = {false, false, false};
+  int best_dpm[3], best_err[3];
 
-  t1 = t0 = (time_unit == 6)?micros():millis();
-  for (uint8_t i=0; i<dpm.size(); i++) { sigmax[i] = 0; sigmin[i] = UINT16_MAX; }
-  while ((t1 - t0) < calib_interval) {
-    if (Serial.available() > 0) { Serial.flush(); return; }
+  for (uint8_t iter=0; iter<calib_max_iters; iter++) {
+    if (!wait_for_settle(tm, done)) return;
 
-    exact_waiting(waiting_time0 + real_time_interval); // Wait Until (now_time - waiting_time0 > real_time_interval)
-    waiting_time0 = micros();
+    t1 = t0 = (time_unit == 6)?micros():millis();
+    for (uint8_t i=0; i<dpm.size(); i++) { sigmax[i] = 0; sigmin[i] = UINT16_MAX; }
+    while ((t1 - t0) < calib_interval) {
+      if (Serial.available() > 0) { Serial.flush(); return; }
 
-    analog_read(indx, usig.sig, numCh, num_avg);
-    for (uint8_t i=0; i<dpm.size(); i++) {
-      usig.binary[numCh*2 + i] = dpm[i];
-      if (sigmax[i] < usig.sig[i]) sigmax[i] = usig.sig[i];
-      if (sigmin[i] > usig.sig[i]) sigmin[i] = usig.sig[i];
-      range[i]  = sigmax[i] - sigmin[i];
+      exact_waiting(waiting_time0 + real_time_interval); // Wait Until (now_time - waiting_time0 > real_time_interval)
+      waiting_time0 = micros();
+
+      analog_read(indx, usig.sig, numCh, num_avg);
+      for (uint8_t i=0; i<dpm.size(); i++) {
+        usig.binary[numCh*2 + i] = dpm[i];
+        if (sigmax[i] < usig.sig[i]) sigmax[i] = usig.sig[i];
+        if (sigmin[i] > usig.sig[i]) sigmin[i] = usig.sig[i];
+        range[i]  = sigmax[i] - sigmin[i];
+      }
+      bin_write(t1-tm, usig.binary, 2*numCh + dpm.size());
+      t1 = (time_unit == 6)?micros():millis();
     }
-   // delay(1);
-    bin_write(t1-tm, usig.binary, 2*numCh + dpm.size());
-    t1 = (time_unit == 6)?micros():millis();
+
+    bool all_done = true;
+    for (uint8_t i=0; i<dpm.size(); i++) {
+      if (done[i]) continue;
+      int center = ((int)range_max[i] + (int)range_min[i]) / 2;
+      int err = (int)range[i] - center; if (err < 0) err = -err;
+      if (!have_best[i] || err < best_err[i]) { best_err[i] = err; best_dpm[i] = dpm[i]; have_best[i] = true; }
+      done[i] = tuning_step(range[i], range_max[i], range_min[i], dpm[i], lo[i], hi[i]);
+      if (done[i] && have_best[i]) dpm[i] = best_dpm[i]; // land on the best reading seen, not just the last guess
+      if (!done[i]) all_done = false;
+    }
+    X95840W_write(i2c_addr, dpm);    // <- Don't Move out from this function
+
+    if (all_done) break;
   }
-  tuning(range, range_max, range_min, dpm);
-  X95840W_write(i2c_addr, dpm);    // <- Don't Move out from this function
-  while ((t1 - t0) < calib_interval + calib_waiting) {
-    if (Serial.available() > 0) { Serial.flush(); return; }
-    exact_waiting(waiting_time0 + real_time_interval);
-    waiting_time0 = micros();
-    analog_read(indx, usig.sig, numCh, num_avg);
-    for (uint8_t i=0; i<dpm.size(); i++) usig.binary[numCh*2 + i] = dpm[i];
-    bin_write(t1-tm, usig.binary, 2*numCh + dpm.size());
-    t1 = (time_unit == 6)?micros():millis();
-  }
-  //delay(calib_waiting);            // <- Don't Move out from this function
 }
 
 void setup() {

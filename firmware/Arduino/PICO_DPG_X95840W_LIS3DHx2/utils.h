@@ -38,7 +38,7 @@ void i2c_2lines_begin(vector<int>);
 void MCP4018_read(vector<int>, vector<uint8_t>&);
 void MCP4018_write(vector<int>, vector<uint8_t>&);
 //
-void tuning(vector<uint16_t>, vector<uint16_t>, vector<uint16_t>, vector<int>&);
+bool tuning_step(uint16_t, uint16_t, uint16_t, int&, int&, int&);
 //
 // SPI (LIS3DH). Register map/mode taken from the public LIS3DH datasheet;
 // not yet verified against real hardware. SCK/MOSI/MISO are a single shared

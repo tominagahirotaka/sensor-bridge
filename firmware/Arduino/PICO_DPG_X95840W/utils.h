@@ -35,7 +35,7 @@ void i2c_2lines_begin(vector<int>);
 void MCP4018_read(vector<int>, vector<uint8_t>&);
 void MCP4018_write(vector<int>, vector<uint8_t>&);
 //
-void tuning(vector<uint16_t>, vector<uint16_t>, vector<uint16_t>, vector<int>&);
+bool tuning_step(uint16_t, uint16_t, uint16_t, int&, int&, int&);
 //
 int   get_int(std::map<string, string>&, string, int);
 float get_float(std::map<string, string>& , string, float);
