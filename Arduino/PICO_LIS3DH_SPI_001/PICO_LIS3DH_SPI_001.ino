@@ -110,7 +110,6 @@ void loop() {
   string input;
   char ch;
   if (Serial.available() > 0) {
-    delay(100);
     ch = Serial.read();
     switch (ch) {
       case 'i': // Initialize
