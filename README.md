@@ -53,9 +53,13 @@ sketch; see [Adding a new sensor board](#adding-a-new-sensor-board) below.
 - Python 3.13 (the version this repository has been developed and tested
   against; earlier Python 3 versions have not been verified)
 - A Raspberry Pi Pico or Pico W running one of the firmware sketches under
-  `Arduino/` (build with the Arduino IDE or `arduino-cli`, RP2040 core by
-  earlephilhower; flash the resulting `.uf2`, or use one of the prebuilt
-  `*.rpipico.uf2` files at the repository root)
+  `Arduino/` -- named for the *framework* the firmware is written in
+  (Arduino-style `.ino` sketches via the community
+  [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
+  core), not Arduino-brand hardware; see [`Arduino/README.md`](Arduino/README.md).
+  Build with the Arduino IDE or `arduino-cli` and flash the resulting
+  `.uf2`, or use one of the prebuilt `*.rpipico.uf2` files at the
+  repository root.
 - Python dependencies, installed via:
 
   ```bash
