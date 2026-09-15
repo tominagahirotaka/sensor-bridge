@@ -483,7 +483,20 @@ class MainWindow(QMainWindow):
                 self.open_smoothing_window()   # Windowを開く
 
     def open_file_write_dialog(self):
-        excelfile = f'{self.fname}_G{self.graph_id:02}.xlsx'
+        # 以前はダイアログを出さず、確認なしに{元ファイル名}_G{graph_id}.xlsxへ直接
+        # (既存ファイルがあれば無警告で上書きして)書き込んでいた。QFileDialogの
+        # 保存ダイアログを挟むことで、保存先の確認と、既存ファイルへの上書き確認
+        # (Qt標準機能)の両方が働くようにする。
+        default_name = f'{self.fname}_G{self.graph_id:02}.xlsx'
+        options = QFileDialog.Options()
+        excelfile, _ = QFileDialog.getSaveFileName(
+            self, t('plot.gui.save_graph_dialog_title'), default_name,
+            "Excel Files (*.xlsx)", options=options)
+        if not excelfile:
+            return  # キャンセルされた場合は何もしない
+        if not excelfile.lower().endswith('.xlsx'):
+            excelfile += '.xlsx'
+
         mark_points = self.data.header.time['check_points']
         if self.data.LT_dict is not None and self.data.PRE_dict is not None:
             note_df = pd.Series({**self.data.LT_dict, **self.data.PRE_dict}).T

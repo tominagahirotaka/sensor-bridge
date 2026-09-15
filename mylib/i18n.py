@@ -267,6 +267,10 @@ MESSAGES = {
         "en": "[INFO] Selected file: {path}",
         "ja": "[INFO] 選択したFile: {path}",
     },
+    "plot.gui.save_graph_dialog_title": {
+        "en": "Save Graph Data",
+        "ja": "グラフDataの保存先",
+    },
     "plot.selected_graph": {
         "en": "[INFO] Selected graph: {graph}",
         "ja": "[INFO] 選択したGraph: {graph}",
