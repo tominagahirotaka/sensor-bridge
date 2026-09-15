@@ -519,8 +519,16 @@ class MainWindow(QMainWindow):
                     x_d, y_d = pltutils.decimate_fixed(x_shifted, y)  # ✅ 間引き
                     cur.setData(x_d, y_d)
 
-            x0 = self.plot_data.data[0][0] - self.time_offset - self.add_shift
-            x_d0, y_d0 = pltutils.decimate_fixed(x0, self.plot_data.data[0][1])
+            # 最下段の概観(region select用)プロットは、常にport0固定だとSelect Port
+            # でport0を非表示にしたときも表示され続けて不自然に見えるため、
+            # 現在表示中(チェック済み)の先頭ポートを使う。
+            base_idx = 0
+            if self.checkboxes:
+                checked = [num for num, cb in self.checkboxes if cb.isChecked()]
+                if checked:
+                    base_idx = checked[0]
+            x0 = self.plot_data.data[base_idx][0] - self.time_offset - self.add_shift
+            x_d0, y_d0 = pltutils.decimate_fixed(x0, self.plot_data.data[base_idx][1])
             self.p_base_plot.setData(x_d0, y_d0)
 
         # For Derivatives
