@@ -112,10 +112,13 @@ class ApplicationWindow(QMainWindow):
             self.rcv.th.join()
             print(t('window.reset_stop_thread'))
         # file closing ... threadを止めてから実行すること
-        if self.rcv.write_flag:
+        # start_running()がconnect_serial()等で例外を出して失敗すると、write_flag=True
+        # のままself.rcv.fileが一度も作られない(start_read_thread()まで到達しない)状態に
+        # なり得る。hasattrで防御しないと、その後のStop/Quitがここで再度クラッシュする。
+        if self.rcv.write_flag and hasattr(self.rcv, 'file'):
             self.rcv.file.fwrite.close()
         # check pointsファイルopen&write&close
-        if self.rcv.write_flag and self.rcv.init_flag and len(
+        if self.rcv.write_flag and hasattr(self.rcv, 'file') and self.rcv.init_flag and len(
                 self.rcv.p.time['check_points']) != 0:
             print(t('window.exec_write_close_cpt'))
             self.rcv.file.write_close_cpt(self.rcv.p)
