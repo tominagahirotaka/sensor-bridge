@@ -148,8 +148,7 @@ and avoids coupling acquisition timing to analysis-side processing cost.
 
 ## License
 
-License information for this repository is being finalized; see the
-`LICENSE` file once added.
+MIT License -- see [`LICENSE`](LICENSE).
 
 ## Citation
 
