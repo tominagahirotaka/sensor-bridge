@@ -13,8 +13,8 @@ data_*/
 
 .DS_Store
 
-# arduino-cli build cache (intermediates for Arduino/*/*.ino; the committed
-# top-level *.ino.rpipico.uf2 files are the actual build output we keep)
-Arduino/*/build/
+# arduino-cli build cache (intermediates for firmware/Arduino/*/*.ino; the
+# committed firmware/*.ino.rpipico.uf2 files are the actual build output we keep)
+firmware/Arduino/*/build/
 
 .pytest_cache/

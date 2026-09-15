@@ -15,5 +15,5 @@ programmed the same way, using an Arduino-compatible core on non-Arduino
 silicon.
 
 One sketch (`.ino` + `utils.h` + `utils.cpp`) per supported sensor board;
-see [`../docs/adding-a-board.md`](../docs/adding-a-board.md) for how a
+see [`../../docs/adding-a-board.md`](../../docs/adding-a-board.md) for how a
 sketch pairs with a `.ini` file under the repository root.

@@ -2,7 +2,7 @@
 
 A "board" in sensor-bridge is a pair of files: `<name>.ini` (and its
 `<name>_jp.ini` sibling for the Japanese UI) plus a matching Arduino sketch
-under `Arduino/`. This guide documents the pieces you need to touch, using
+under `firmware/Arduino/`. This guide documents the pieces you need to touch, using
 attributes and values captured from real hardware handshakes rather than
 guesses, and closes with the checklist that has caught every real bug found
 while adding boards to this repository so far.
@@ -141,7 +141,7 @@ entry per listed index; `[N]field(...)` -> `N` sequential entries).
 
 ## Firmware side
 
-Each sketch under `Arduino/<name>/` implements the PC-facing half of the
+Each sketch under `firmware/Arduino/<name>/` implements the PC-facing half of the
 same handshake:
 
 - `initialSetupParam(ch, input)` -- parses the PC's `env_set` string,

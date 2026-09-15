@@ -33,7 +33,7 @@ before citing the number in the paper.
 ## Supported hardware
 
 Each row below is a `<name>.ini` / `<name>_jp.ini` pair (English / Japanese
-UI) plus a matching sketch under `Arduino/`.
+UI) plus a matching sketch under `firmware/Arduino/`.
 
 | Board config | Sensor / purpose |
 |---|---|
@@ -52,13 +52,14 @@ sketch; see [Adding a new sensor board](#adding-a-new-sensor-board) below.
 - Python 3.13 (the version this repository has been developed and tested
   against; earlier Python 3 versions have not been verified)
 - A Raspberry Pi Pico or Pico W running one of the firmware sketches under
-  `Arduino/` -- named for the *framework* the firmware is written in
+  `firmware/Arduino/` -- named for the *framework* the firmware is written in
   (Arduino-style `.ino` sketches via the community
   [earlephilhower/arduino-pico](https://github.com/earlephilhower/arduino-pico)
-  core), not Arduino-brand hardware; see [`Arduino/README.md`](Arduino/README.md).
+  core), not Arduino-brand hardware; see
+  [`firmware/Arduino/README.md`](firmware/Arduino/README.md).
   Build with the Arduino IDE or `arduino-cli` and flash the resulting
-  `.uf2`, or use one of the prebuilt `*.rpipico.uf2` files at the
-  repository root.
+  `.uf2`, or use one of the prebuilt `*.rpipico.uf2` files under
+  `firmware/`.
 - Python dependencies, installed via:
 
   ```bash
