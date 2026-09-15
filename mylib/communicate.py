@@ -70,10 +70,19 @@ class ReceiveCommon:
             self.p.env_set, self.code = utils.read_setting_ini(
                 i18n.resolve_localized_path('default.ini'))
         if args.init is not None:
-            print(t('comm.additional_init', init=args.init))
-            env_set, code = utils.read_setting_ini(args.init)
-            self.p.env_set.update(env_set)
-            self.code.update(code)
+            # configparser.read()は指定ファイルが存在しなくても例外を出さず黙って何も
+            # 読まない(空dict)ため、拡張子.iniを付け忘れると-i自体が無言で無効化される
+            # (例: -i DPG_X95840Wpeak と打つとDPG_X95840Wpeak.iniではなく存在しない
+            #  'DPG_X95840Wpeak'を探しに行き、何も上書きされないまま起動してしまう)。
+            init_path = args.init if os.path.isfile(args.init) else i18n.resolve_localized_path(
+                args.init if args.init.endswith('.ini') else args.init + '.ini')
+            if os.path.isfile(init_path):
+                print(t('comm.additional_init', init=init_path))
+                env_set, code = utils.read_setting_ini(init_path)
+                self.p.env_set.update(env_set)
+                self.code.update(code)
+            else:
+                print(t('comm.additional_init_not_found', init=args.init, tried=init_path))
         #
         cssfile = board_program + \
             '.css' if os.path.isfile(board_program + '.css') else 'default.css'
