@@ -1,5 +1,7 @@
 # sensor-bridge
 
+[![tests](https://github.com/tominagahirotaka/sensor-bridge/actions/workflows/tests.yml/badge.svg)](https://github.com/tominagahirotaka/sensor-bridge/actions/workflows/tests.yml)
+
 A Python/PyQt5 research instrumentation framework for acquiring, visualizing,
 and analyzing sensor data streamed from a Raspberry Pi Pico / Pico W over
 USB serial. It pairs a lightweight Arduino firmware layer (one sketch per
@@ -50,7 +52,10 @@ sketch; see [Adding a new sensor board](#adding-a-new-sensor-board) below.
 ## Requirements
 
 - Python 3.13 (the version this repository has been developed and tested
-  against; earlier Python 3 versions have not been verified)
+  against; earlier Python 3 versions have not been verified). Linux is the
+  primary development/CI platform; the author has also run `get.py`/`plot.py`
+  successfully on Windows and macOS, though those platforms are not covered
+  by the automated test suite or CI.
 - A Raspberry Pi Pico or Pico W running one of the firmware sketches under
   `firmware/Arduino/` -- named for the *framework* the firmware is written in
   (Arduino-style `.ino` sketches via the community
@@ -155,6 +160,12 @@ with reasonable success as a first draft; as with any hardware-facing
 code, the result still needs verification against real hardware before
 being trusted (register maps, timing, and sensor-specific quirks are not
 things a template alone can validate).
+
+**Security note.** Because a `.ini`'s `[code]` section is executed as
+Python, only load `.ini` files you wrote yourself or have reviewed --
+treat an `.ini` from an untrusted source the same as any other
+third-party Python script, since it runs with the same privileges as
+`get.py`/`plot.py` themselves.
 
 **Live acquisition and analysis are separate applications.** `get.py`
 focuses on low-latency real-time acquisition; `plot.py` focuses on

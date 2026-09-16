@@ -9,4 +9,4 @@ PyPDF2
 seaborn
 openpyxl
 xlsxwriter
-swan
+swan==0.7.3  # continuous wavelet analysis (PyPI: https://pypi.org/project/swan/); pinned since the name is easily confused with unrelated packages
