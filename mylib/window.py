@@ -28,9 +28,9 @@ font_family_name = {
 
 
 class ApplicationWindow(QMainWindow):
-    def __init__(self, rcv, args):
+    def __init__(self, rcv, args, win_index=0):
         super().__init__()
-        self.rcv, self.args = rcv, args
+        self.rcv, self.args, self.win_index = rcv, args, win_index
         self.code = rcv.code
         self.title = rcv.p.env_set['title']
         self.board = self.rcv.board
@@ -72,10 +72,20 @@ class ApplicationWindow(QMainWindow):
             w = int(sg.width() * 0.75)
             h = int(sg.height() * 0.75)
             self.resize(w, h)                          # resize the ApplicationWindow itself
-        # Center it on screen
-            self.move(sg.x() + (sg.width() - w) // 2,
-                      sg.y() + (sg.height() - h) // 2)
-            debug_print(self.args, f'screen={sg.width()}x{sg.height()}, win={w}x{h}')
+        # Center it on screen, then stagger by win_index so multiple
+        # simultaneously-connected boards (each its own process/window) don't
+        # land exactly on top of each other; a single board (win_index=0)
+        # still lands exactly centered, as before. Clamped to available
+        # screen geometry so the cascade can't push a window off-screen.
+            base_x = sg.x() + (sg.width() - w) // 2
+            base_y = sg.y() + (sg.height() - h) // 2
+            step = 32
+            max_dx = max(sg.x() + sg.width() - w - base_x, 0)
+            max_dy = max(sg.y() + sg.height() - h - base_y, 0)
+            self.move(base_x + min(step * self.win_index, max_dx),
+                      base_y + min(step * self.win_index, max_dy))
+            debug_print(self.args, f'screen={sg.width()}x{sg.height()}, win={w}x{h}, '
+                                    f'win_index={self.win_index}')
 
         # QTimer setting (allows the figure to be redrawn at a fixed interval)
         self.timer = QTimer(self)

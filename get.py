@@ -19,9 +19,9 @@ from mylib.i18n import t
 from version import __version__
 
 
-def make_window(argv, args, board):
-    i18n.set_language(args.lang)                  # re-apply in this (possibly spawned) process
-    rcv = comm.Receive(args, board)              # data receive object
+def make_window(argv, args, board, win_index=0):
+    i18n.set_language(args.lang)                  # re-apply in this spawned process
+    rcv = comm.Receive(args, board)               # data receive object
     # argv[0] becomes the X11 WM_CLASS (verified via xprop); Qt's
     # setDesktopFileName() only affects the Wayland app-id, so both are
     # needed to match sensor-bridge-get.desktop's StartupWMClass on either
@@ -29,11 +29,23 @@ def make_window(argv, args, board):
     app = QApplication(['sensor-bridge-get'] + list(argv[1:]))
     app.setDesktopFileName('sensor-bridge-get')
     app.setWindowIcon(QIcon('icon.png'))
-    window = win.ApplicationWindow(rcv, args)  # kept alive by this ref; PyQt closes GC'd windows
+    # win_index staggers this window's position when multiple boards are
+    # connected at once (each board runs in its own process, so they can't
+    # share a running counter); a single board still centers exactly as before.
+    window = win.ApplicationWindow(rcv, args, win_index)  # kept alive by this ref; PyQt closes GC'd windows
     sys.exit(app.exec_())                        # ApplicationWindow excution
 
 
 def main():
+    # 'spawn' gives each board its own fresh interpreter instead of a forked
+    # copy of this one. On Linux (where 'fork' is the historical default),
+    # opening a board's serial port in a forked child was observed on real
+    # hardware to leave DTR/termios handling broken for that port -- a fresh
+    # board_program handshake (see Board.open_serial()) would hang or return
+    # garbage even though the exact same code worked every time unforked.
+    # macOS/Windows already default to 'spawn', so this only changes Linux.
+    multiprocessing.set_start_method('spawn')
+
     # --lang must be resolved before the parser is built so --help itself is localized.
     i18n.set_language(i18n.resolve_lang_from_argv(sys.argv)
                       or os.environ.get('SENSOR_BRIDGE_LANG'))
@@ -60,8 +72,9 @@ def main():
 
     boards = comm.search_connected_boards()     # List the connected boards
     print(t('get.connected_boards', boards=boards))
-    for board in boards:                        # multi processing
-        multiprocessing.Process(target=make_window, args=(sys.argv, args, board)).start()
+    for win_index, board in enumerate(boards):  # multi processing
+        multiprocessing.Process(
+            target=make_window, args=(sys.argv, args, board, win_index)).start()
 
 
 if __name__ == '__main__':

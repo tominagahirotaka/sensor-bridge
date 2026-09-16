@@ -9,10 +9,38 @@ void exact_waiting(uint32_t t0_plus_thre) { uint32_t t1 = micros(); while (t1 < 
 //
 // Serial
 //
-void begin_serial(uint32_t baud, uint16_t delay_time, char st[]) {
+static bool _serial_was_connected = false;
+
+static void _announce_board(char st[]) {
   char strbuf[64];
+  sprintf(strbuf, ":%s:@@", st);
+  Serial.println(strbuf);
+}
+
+void begin_serial(uint32_t baud, uint16_t delay_time, char st[]) {
   Serial.begin(baud); while(!Serial){;} delay(delay_time);
-  sprintf(strbuf, ":%s:@@", st); Serial.println(strbuf);
+  _announce_board(st);
+  _serial_was_connected = true;
+}
+
+void check_serial_reconnect(char st[], int &ok) {
+  if (Serial) {
+    if (!_serial_was_connected) {
+      _announce_board(st);
+      _serial_was_connected = true;
+    }
+  } else {
+    if (_serial_was_connected) {
+      // Host disconnected without sending 'r'/'q' (e.g. killed rather than
+      // cleanly quit, instead of closing the window/pressing Stop first) --
+      // stop streaming so a future host's fresh connection isn't flooded
+      // with orphaned sample data nobody asked for, which would otherwise
+      // corrupt the next board_program handshake (stray bytes can contain
+      // an incidental '@@' and be misread as the announcement).
+      ok = 0;
+    }
+    _serial_was_connected = false;
+  }
 }
 //
 // i2c

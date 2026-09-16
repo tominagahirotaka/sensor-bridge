@@ -119,6 +119,7 @@ bool sensor_read(uint16_t *sig) {
 void setup() {ok = 0; begin_serial(baud, 100, program_name); }
 
 void loop() {
+  check_serial_reconnect(program_name, ok);  // re-announce + auto-stop on host reconnect/disconnect
   string input;
   char ch;
   if (Serial.available() > 0) {

@@ -135,10 +135,24 @@ versioned), so it needs recordings of your own to run against.
 
 ## File format
 
-A recording is saved as a `.dat` (binary samples, pickled header) plus a
-`.cpt` (checkpoint marks) file, both written by `get.py` under the
-directory named by the board's `dir_name` setting. `plot.py` reads this
-pair back into the same in-memory data model used for live plotting.
+A recording is saved as a `.dat` plus a `.cpt` file, both written by
+`get.py` under the directory named by the board's `dir_name` setting,
+and both sharing the same pickled-header format (`mylib/fileIO.py`).
+`.dat` holds that header (written at recording start) followed by the
+raw sample stream. `.cpt` holds the same header format written again at
+Stop time, once the timestamped marks placed via the `mArk` button
+(`header.time['check_points']`) are known -- they aren't yet when
+`.dat`'s header is first written. `plot.py` loads the header from
+`.cpt` when present, for exactly this reason (falling back to `.dat`'s
+header otherwise). `.dat`'s header is deliberately never rewritten after
+it is first written -- marks are recorded to the separate `.cpt` file
+instead of seeking back into the open, actively-written `.dat` file --
+so that a crash or disconnection partway through a recording still
+leaves `.dat` intact and readable, at the cost only of that session's
+marks. The `.cpt` extension is a naming holdover from an
+earlier name for this feature, "checkpoint" -- the UI has since been
+renamed to `mArk`, but the file extension was kept for backward
+compatibility with existing recordings.
 
 ## Design notes
 

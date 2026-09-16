@@ -139,6 +139,19 @@ MESSAGES = {
         "en": "[INFO] open_serial & get board_program name",
         "ja": "[INFO] open_serial & board_program名を取得",
     },
+    "comm.board_program_retry": {
+        "en": "[WARN] board_program handshake attempt {attempt} got unparsable "
+              "data ({raw!r}), retrying...",
+        "ja": "[WARN] board_programハンドシェイクの{attempt}回目の試行で解析不能な"
+              "データを受信({raw!r})。再試行します...",
+    },
+    "comm.board_program_failed": {
+        "en": "[ERROR] Could not complete the board_program handshake on {port} "
+              "after several attempts; the board may be stuck. Try unplugging "
+              "and reconnecting it.",
+        "ja": "[ERROR] {port}でboard_programハンドシェイクが数回試行しても完了しません"
+              "でした。Boardが固まっている可能性があります。一度抜き差ししてください。",
+    },
     "comm.thread_no_write_start": {
         "en": "[INFO] Thread: [get_data_no_write] Start",
         "ja": "[INFO] Thread: [get_data_no_write] 開始",

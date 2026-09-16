@@ -16,6 +16,13 @@ void software_reset();
 void exact_waiting(uint32_t);
 //
 void begin_serial(uint32_t, uint16_t, char st[]);
+// Re-announces the board (same message as begin_serial's initial one) on
+// every new host connection detected in loop(), not just the very first one
+// at boot -- so a host reconnecting to an already-running, un-rebooted board
+// (e.g. after a previous get.py process was killed instead of cleanly quit,
+// which is the only path that calls software_reset()) still gets a handshake
+// response instead of waiting forever.
+void check_serial_reconnect(char st[], int &ok);
 //
 // SPI (LIS3DH). Register map/mode taken from the public LIS3DH datasheet;
 // not yet verified against real hardware.

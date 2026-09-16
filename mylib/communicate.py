@@ -3,11 +3,13 @@
 handshake protocol (parameters + binary 'struct' description), and the
 background thread that streams decoded samples for get.py's GUI."""
 
+import contextlib
 import datetime
 import json
 import os
 import platform
 import struct
+import tempfile
 import threading
 import time
 
@@ -25,11 +27,63 @@ try:
 except ImportError:
     _TERMIOS_ERRORS = ()
 
+try:
+    import fcntl                       # POSIX advisory file locking
+
+    def _lock_file(f):
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
+    def _unlock_file(f):
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+except ImportError:
+    import msvcrt                      # Windows advisory file locking
+
+    def _lock_file(f):
+        # msvcrt.locking(LK_LOCK) is not a true blocking wait like
+        # fcntl.flock(LOCK_EX): the underlying Windows CRT call retries
+        # internally only ~10 times, 1 second apart, then raises OSError.
+        # A sibling board's handshake retry loop can legitimately take
+        # longer than that (see open_serial()'s up to ~17s worst case), so
+        # retry here ourselves to get the same indefinite-wait behavior
+        # POSIX gets from flock().
+        while True:
+            try:
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                time.sleep(0.2)
+
+    def _unlock_file(f):
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+
 import mylib.fileIO as FIO
 import mylib.i18n as i18n
 import mylib.utils as utils
 from mylib.debug_utils import debug_print
 from mylib.i18n import t
+
+# When multiple boards are connected at once, each runs in its own OS
+# process (see get.py's make_window()); their initial handshakes (see
+# ReceiveCommon.__init__ below) were observed on real hardware to corrupt
+# each other if they run concurrently, even though each board has its own,
+# entirely separate serial port. A plain OS-level file lock serializes this
+# section across those processes regardless of how they were started
+# (fork/spawn) or how long the process that launched them stays alive --
+# unlike a multiprocessing.Lock passed down from that launcher, which
+# depends on both and was found to be unreliable here for exactly that reason.
+_HANDSHAKE_LOCK_PATH = os.path.join(tempfile.gettempdir(), 'sensor-bridge-handshake.lock')
+
+
+@contextlib.contextmanager
+def _handshake_lock():
+    with open(_HANDSHAKE_LOCK_PATH, 'w') as f:
+        _lock_file(f)
+        try:
+            yield
+        finally:
+            _unlock_file(f)
 
 
 def _coerce_env_value(value_str):
@@ -61,43 +115,44 @@ class ReceiveCommon:
         self.p.board['device'] = board
         self.board = Board(self.p, args, True)        # Instance of Board class
         self.board.loop_th = True         # Thread loop
-        board_program = self.board.open_serial()      # open serial & get board_program name
-        ini_path = i18n.resolve_localized_path(
-            board_program + '.ini')  # `_jp.ini` sibling when --lang ja
-        if os.path.isfile(ini_path):                  # Get measurement environment info
-            self.p.env_set, self.code = utils.read_setting_ini(ini_path)
-        else:
-            print(t('comm.ini_missing_use_default', ini=board_program + '.ini'))
-            self.p.env_set, self.code = utils.read_setting_ini(
-                i18n.resolve_localized_path('default.ini'))
-        if args.init is not None:
-            # configparser.read() silently reads nothing (an empty dict)
-            # instead of raising when the given file doesn't exist, so
-            # forgetting the .ini extension silently disables -i entirely
-            # (e.g. `-i MyBoard` looks for a nonexistent
-            # 'MyBoard' instead of 'MyBoard.ini', and the
-            # program starts with nothing overridden).
-            init_path = args.init if os.path.isfile(args.init) else i18n.resolve_localized_path(
-                args.init if args.init.endswith('.ini') else args.init + '.ini')
-            if os.path.isfile(init_path):
-                print(t('comm.additional_init', init=init_path))
-                env_set, code = utils.read_setting_ini(init_path)
-                self.p.env_set.update(env_set)
-                self.code.update(code)
+        with _handshake_lock():
+            board_program = self.board.open_serial()      # open serial & get board_program name
+            ini_path = i18n.resolve_localized_path(
+                board_program + '.ini')  # `_jp.ini` sibling when --lang ja
+            if os.path.isfile(ini_path):                  # Get measurement environment info
+                self.p.env_set, self.code = utils.read_setting_ini(ini_path)
             else:
-                print(t('comm.additional_init_not_found', init=args.init, tried=init_path))
-        #
-        cssfile = board_program + \
-            '.css' if os.path.isfile(board_program + '.css') else 'default.css'
-        with open(cssfile, 'r') as f:
-            self.style = f.read()
-        if args.style is not None:
-            with open(args.style, 'r') as f:
-                self.style += f.read()
-        #
-        # initialize: put & get parameters between PC and board
-        self.board.init_serial(b'i')
-        print(f'[INFO] {self.p.env_set=}')
+                print(t('comm.ini_missing_use_default', ini=board_program + '.ini'))
+                self.p.env_set, self.code = utils.read_setting_ini(
+                    i18n.resolve_localized_path('default.ini'))
+            if args.init is not None:
+                # configparser.read() silently reads nothing (an empty dict)
+                # instead of raising when the given file doesn't exist, so
+                # forgetting the .ini extension silently disables -i entirely
+                # (e.g. `-i MyBoard` looks for a nonexistent
+                # 'MyBoard' instead of 'MyBoard.ini', and the
+                # program starts with nothing overridden).
+                init_path = args.init if os.path.isfile(args.init) else i18n.resolve_localized_path(
+                    args.init if args.init.endswith('.ini') else args.init + '.ini')
+                if os.path.isfile(init_path):
+                    print(t('comm.additional_init', init=init_path))
+                    env_set, code = utils.read_setting_ini(init_path)
+                    self.p.env_set.update(env_set)
+                    self.code.update(code)
+                else:
+                    print(t('comm.additional_init_not_found', init=args.init, tried=init_path))
+            #
+            cssfile = board_program + \
+                '.css' if os.path.isfile(board_program + '.css') else 'default.css'
+            with open(cssfile, 'r') as f:
+                self.style = f.read()
+            if args.style is not None:
+                with open(args.style, 'r') as f:
+                    self.style += f.read()
+            #
+            # initialize: put & get parameters between PC and board
+            self.board.init_serial(b'i')
+            print(f'[INFO] {self.p.env_set=}')
 
     # Start the USB-read-only thread
     def start_read_thread(self):
@@ -249,11 +304,26 @@ class Board:
         self.func_unit = [lst[2] for lst in self.func]
         debug_print(self.args, f'{self.lim_auto_func=}\n[Debug] {self.lim_auto_raw=}')
 
-    def _waiting(self, ch):
+    def _waiting(self, ch, timeout=None):
+        t0 = time.monotonic()
         while not self.ser.inWaiting() > 0:
+            if timeout is not None and time.monotonic() - t0 > timeout:
+                return b''          # let the caller decide how to react
             time.sleep(0.001)  # wait 1ms to free up the CPU
 
-        u_atmark = self.ser.read_until(b'@@')              # Flush buffer until @@
+        if timeout is not None:
+            # read_until() is itself bounded by self.ser.timeout (16s by
+            # default), not the `timeout` given here -- without narrowing it
+            # too, a partial/stray fragment already in the buffer (with no
+            # '@@' ever following it) would block far longer than intended
+            # before read_until() gives up and returns just that fragment.
+            orig_ser_timeout = self.ser.timeout
+            self.ser.timeout = timeout
+        try:
+            u_atmark = self.ser.read_until(b'@@')              # Flush buffer until @@
+        finally:
+            if timeout is not None:
+                self.ser.timeout = orig_ser_timeout
         debug_print(self.args, f'{u_atmark=}')
         if self.ser.inWaiting() > 0:
             self.ser.readline()  # Flush \r\n after @@   <- IMPORTANT
@@ -284,11 +354,54 @@ class Board:
         print(t('comm.open_serial'))
         # serial port OPEN
         self.ser.open()
-        # Wait for the board's response, obtain the 'board_program' name
-        flag = self._waiting('board_program')
+        # Wait for the board's response, obtain the 'board_program' name.
+        #
+        # Deliberately do NOT flush the input buffer before this first
+        # read: some boards (e.g. the X95840W) answer check_serial_reconnect()
+        # fast enough that their announcement can already be sitting in the
+        # OS buffer the instant open() returns, and flushing here would
+        # discard it in a race, leaving nothing to wait for until another
+        # connection edge.
+        #
+        # If a previous host process was killed (rather than cleanly quit)
+        # while the board was mid-stream, a burst of orphaned sample bytes
+        # can still be draining out right around the reconnect (the
+        # firmware stops streaming on disconnect, but bytes already queued
+        # for transmission keep arriving after we open); that burst can
+        # contain an incidental '@@' before the real announcement, causing
+        # read_until() to stop short of it. When that happens (some data
+        # arrived but didn't parse), we deliberately do NOT flush the input
+        # buffer either -- the real announcement is likely queued right
+        # behind what we just read, so the next attempt keeps reading
+        # forward through the same stream instead of discarding it.
+        #
+        # Only a truly empty attempt (nothing arrived at all) is treated as
+        # a dead link: that's when we flush (clearing any residual stale
+        # bytes) and then explicitly drop/re-raise DTR to force the
+        # firmware to see (or re-see) a connection edge and re-announce
+        # itself (see check_serial_reconnect() in the firmware) -- nothing
+        # is flushed *after* re-raising DTR, since the announcement can
+        # arrive within the toggle's own settle time and the same race
+        # would just discard it again.
+        flag = b''
+        for attempt in range(5):
+            if attempt > 0 and flag == b'':
+                self.ser.reset_input_buffer()
+                self.ser.dtr = False
+                time.sleep(0.2)
+                self.ser.dtr = True
+                time.sleep(0.2)
+            flag = self._waiting('board_program', timeout=3)
+            try:
+                board_program = flag.decode().split(':')[1]
+                break
+            except (UnicodeDecodeError, IndexError):
+                print(t('comm.board_program_retry', attempt=attempt + 1, raw=flag))
+                continue
+        else:
+            raise RuntimeError(t('comm.board_program_failed', port=self.p.board['device'][0]))
         self.ser.reset_output_buffer()
         self.ser.reset_input_buffer()
-        board_program = flag.decode().split(':')[1]
         print(f'[INFO] {board_program=}')
         return board_program
 

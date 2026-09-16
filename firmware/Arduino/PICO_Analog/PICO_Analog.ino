@@ -78,6 +78,7 @@ void setup() {
 }
 
 void loop() {
+  check_serial_reconnect(program_name, ok);  // re-announce + auto-stop on host reconnect/disconnect
   string input;
   char ch;
   if (Serial.available() > 0) {
