@@ -49,6 +49,34 @@ UI) plus a matching sketch under `firmware/Arduino/`.
 New boards are added by pairing a new `<name>.ini` with a new Arduino
 sketch; see [Adding a new sensor board](#adding-a-new-sensor-board) below.
 
+### Wireless-capable boards (Pico W / Pico 2 / Pico 2 W)
+
+Prebuilt `.uf2`s for the RP2350-based Pico 2, and the wireless-capable
+Pico W / Pico 2 W, are included under `firmware/` alongside the
+plain-Pico ones (`Analog`, `DPG_X95840W`, `LIS3DH`), built from the same
+sketches with no source changes -- GP26/ADC0 is the same GPIO on RP2040
+and RP2350 (`A0` is defined identically for both in the arduino-pico
+core, confirmed from its variant headers). Whether a front end actually
+works on a *wireless* board, though, depends on the circuit, not just the
+chip:
+
+- **X95840W PPG front end** and **LIS3DH accelerometer (SPI)** were
+  verified on real Pico W and Pico 2 W hardware and work identically to
+  a plain Pico/Pico 2.
+- **A generic single-channel analog microphone front end**
+  (`Analog.ini`; bias resistor + coupling capacitor into the ADC, the
+  same circuit used for the paper's audio example) does not: on both
+  Pico W and Pico 2 W it shows sustained ADC clipping with no
+  correlation to actual sound, reproducible across multiple boards and
+  wiring re-checks, while the identical circuit on a plain Pico/Pico 2
+  is clean. The likely explanation is impedance -- the mic circuit's ADC
+  node is a comparatively high-impedance divider (~5k Ohm Thevenin),
+  while the PPG front end drives the ADC at lower impedance and LIS3DH
+  is a digital SPI link; high-impedance analog nodes are far more
+  susceptible to picking up electrical interference from the onboard
+  wireless radio. A lower-impedance divider and/or shielding the input
+  line would be the likely fix, but this hasn't been tried.
+
 ## Requirements
 
 - Python 3.13 (the version this repository has been developed and tested
