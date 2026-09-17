@@ -19,9 +19,9 @@ from mylib.i18n import t
 from version import __version__
 
 
-def make_window(argv, args, board, win_index=0):
+def make_window(argv, args, board, win_index=0, num_boards=1):
     i18n.set_language(args.lang)                  # re-apply in this spawned process
-    rcv = comm.Receive(args, board)               # data receive object
+    rcv = comm.Receive(args, board, num_boards)   # data receive object
     # argv[0] becomes the X11 WM_CLASS (verified via xprop); Qt's
     # setDesktopFileName() only affects the Wayland app-id, so both are
     # needed to match sensor-bridge-get.desktop's StartupWMClass on either
@@ -67,6 +67,7 @@ def main():
                         default=i18n.get_language(),
                         help=t('help.lang',
                                langs='/'.join(i18n.SUPPORTED_LANGS)))
+    parser.add_argument('-sync', '--sync', action='store_true', help=t('help.sync'))
     args = parser.parse_args()
     i18n.set_language(args.lang)
 
@@ -74,7 +75,7 @@ def main():
     print(t('get.connected_boards', boards=boards))
     for win_index, board in enumerate(boards):  # multi processing
         multiprocessing.Process(
-            target=make_window, args=(sys.argv, args, board, win_index)).start()
+            target=make_window, args=(sys.argv, args, board, win_index, len(boards))).start()
 
 
 if __name__ == '__main__':

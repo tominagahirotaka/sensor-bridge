@@ -1,0 +1,1 @@
+opencv-python-headless  # only needed for get_camera.py; not required by get.py/plot.py

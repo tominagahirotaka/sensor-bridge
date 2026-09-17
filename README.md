@@ -105,6 +105,69 @@ Excel/CSV export. Run `python plot.py --help` for the full option list
 (graph type, wavelet parameters, moving-average window, overlay toggles,
 etc.).
 
+## Webcam capture (`get_camera.py`, optional)
+
+`get_camera.py` is a small companion script for previewing and recording
+from a USB webcam alongside `get.py`. It's independent of the rest of
+sensor-bridge -- a webcam (USB Video Class) and a Pico board (USB
+CDC-ACM/serial) are different USB device classes with separate OS driver
+stacks, so running it at the same time as one or more `get.py` processes
+needs no special coordination between them (unlike `get.py`'s own
+multi-board case, where several *boards'* serial handshakes do need to be
+serialized against each other -- see `mylib/communicate.py`).
+
+```bash
+pip install -r requirements-camera.txt   # opencv-python-headless; not needed for get.py/plot.py
+python get_camera.py                     # opens camera 0
+python get_camera.py -c 1                # a different camera index
+python get_camera.py --list              # list openable camera indices and exit
+```
+
+Recording (the "Run"/"Stop" buttons) writes an `.mp4` plus a `.csv` of
+per-frame timestamps to `data_camera/` (`-o` to change the directory).
+Unlike the Pico boards, a webcam has no device-side clock `get.py` can
+read: each frame's timestamp is stamped by the host at the moment OpenCV
+hands it back, carrying the same PC-side scheduling/USB jitter that
+sensor-bridge's device-side timestamping exists specifically to avoid for
+sensor data (see "Why sensor-bridge" above). Treat a recording's `.csv`
+as a rough visual record, not as a precise synchronization signal against
+a simultaneous sensor recording. This script, and its own tests
+(`tests/test_camera.py`, skipped automatically when `opencv-python` isn't
+installed), are not part of the code described in the associated
+SoftwareX manuscript.
+
+### Starting several windows together (`-sync` / `sync_trigger.py`)
+
+`get.py`'s boards and `get_camera.py` each run as separate OS processes
+with their own Qt event loop, so a Qt keyboard shortcut only ever fires
+in whichever one currently has focus -- there is no such thing as a
+shortcut shared across independent processes. `-sync` opts a window into
+a small local signal instead: pass it to any combination of `get.py`
+and/or `get_camera.py` windows, then run `sync_trigger.py` to start or
+stop all of them together.
+
+```bash
+python get.py -sync              # each board window listens for the signal
+python get_camera.py -sync       # ditto
+python launch_synced.py          # or launch both of the above at once
+
+python sync_trigger.py start     # sends "Run" to every -sync window at once
+python sync_trigger.py stop      # sends "Stop" to every -sync window at once
+python sync_trigger.py quit      # cleanly closes every -sync window at once
+python sync_trigger.py --list    # show which -sync windows are currently listening
+```
+
+For a genuine single keypress, bind an OS-level global keyboard shortcut
+(in your OS's own settings -- Windows/macOS/GNOME/etc. all have one) to
+run `python sync_trigger.py start`; Python itself has no reliable,
+cross-platform way to grab a system-wide hotkey. See `mylib/sync.py` for
+the mechanism (each `-sync` window registers its own local UDP port under
+a small directory in the system temp dir; `sync_trigger.py` reads that
+directory and sends one command to every port it finds) and
+`tests/test_sync.py` for its tests. Off by default, so a plain
+`python get.py` / `python get_camera.py` behaves exactly as before; not
+part of the code described in the associated SoftwareX manuscript.
+
 ## Testing
 
 The suite under `tests/` covers the pure-logic and PyQt5/pyqtgraph-backed

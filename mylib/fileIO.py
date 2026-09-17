@@ -42,15 +42,18 @@ class FileIO:
     def write_open(self, p):
         dirname = p.env_set['dir_name']
         head_str = p.machine['node']
-        # Distinguishes concurrently-recording boards on the same host (two
-        # boards of the same type, started in the same second, would
-        # otherwise both resolve to the same filename and one would clobber
-        # the other's recording); e.g. '/dev/ttyACM0' -> 'ttyACM0', 'COM3' -> 'COM3'.
-        port_str = os.path.basename(p.board['device'][0])
+        # Only distinguish by port when more than one board was connected
+        # at once (two boards of the same type, started in the same
+        # second, would otherwise both resolve to the same filename and
+        # one would clobber the other's recording); with a single board,
+        # the filename stays exactly the plain hostname_timestamp form it
+        # always was. e.g. '/dev/ttyACM0' -> 'ttyACM0', 'COM3' -> 'COM3'.
+        if p.board.get('multi_board'):
+            head_str += '_' + os.path.basename(p.board['device'][0])
         format_time = "{:%Y%m%d_%H%M%S}".format(p.time['start_time'])
         os.makedirs(dirname, exist_ok=True)
-        self.data_filename = f'{dirname}/{head_str}_{port_str}_{format_time}.dat'
-        self.cpt_filename = f'{dirname}/{head_str}_{port_str}_{format_time}.cpt'
+        self.data_filename = f'{dirname}/{head_str}_{format_time}.dat'
+        self.cpt_filename = f'{dirname}/{head_str}_{format_time}.cpt'
         # Pickle object p and write it at the start of the file
         self.fwrite = open(self.data_filename, 'wb')
         self.fwrite.write(self.make_header(p))
