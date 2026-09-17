@@ -20,6 +20,7 @@ import mylib.Qtutils as Qtu
 import mylib.utils as utils
 from mylib.debug_utils import debug_print
 from mylib.i18n import t
+from mylib.sync import SyncListener
 
 font_family_name = {
     'Windows': 'Yu Gothic',
@@ -35,6 +36,12 @@ class ApplicationWindow(QMainWindow):
         self.title = rcv.p.env_set['title']
         self.board = self.rcv.board
         self.setFont(QFont(font_family_name[platform.system()]))  # Font setting
+        # Opt-in "start/stop together" listener (see mylib/sync.py and
+        # sync_trigger.py) -- off by default so a plain `python get.py`
+        # behaves exactly as before.
+        self.sync = SyncListener(label=self.title) if getattr(args, 'sync', False) else None
+        if self.sync:
+            self.sync.triggered.connect(self.on_sync_command)
         self.initUI()
 
     def initUI(self):
@@ -105,6 +112,18 @@ class ApplicationWindow(QMainWindow):
     def update(self):
         first_last_data, peak_interval = self.figure.update(self.rcv.stream)
         exec(self.code['lcd_update'], globals(), locals())
+        # Board.went_idle is set once by the reader thread (see
+        # communicate.py's get_data_no_write()/get_data_and_write()) the
+        # moment the board is first found to have gone quiet. Always
+        # consumed here so a stale flag can never carry over into a later,
+        # unrelated session; only surfaced as a status message during
+        # caliBrate, since that's the one mode where "went quiet" means
+        # "finished" rather than "disconnected".
+        if self.board.went_idle:
+            self.board.went_idle = False
+            if self.marker == b'c':
+                self.status_label.setText(t('window.status_calib_done'))
+                self.status_label.setStyleSheet("QLabel { color : blue; }")
 
     # Start plotting (Qt)
     def start_animation(self):
@@ -182,23 +201,29 @@ class ApplicationWindow(QMainWindow):
 
     def on_test_button(self):
         self.marker = b's'
-        self.reset()
-        self.rcv.init_flag = True
-        self.rcv.write_flag = False
-        self.status_label.setText(t('window.status_test'))
-        self.status_label.setStyleSheet("QLabel { color : black; }")
-        self.rcv.start_running(self.marker)
-        self.start_animation()
+        try:
+            self.reset()
+            self.rcv.init_flag = True
+            self.rcv.write_flag = False
+            self.status_label.setText(t('window.status_test'))
+            self.status_label.setStyleSheet("QLabel { color : black; }")
+            self.rcv.start_running(self.marker)
+            self.start_animation()
+        except RuntimeError as exc:
+            self._show_connection_error(exc)
 
     def on_start_button(self):
         self.marker = b's'
-        self.reset()
-        self.rcv.init_flag = True
-        self.rcv.write_flag = True
-        self.status_label.setText(t('window.status_run'))
-        self.status_label.setStyleSheet("QLabel { color : red; }")
-        self.rcv.start_running(self.marker)
-        self.start_animation()
+        try:
+            self.reset()
+            self.rcv.init_flag = True
+            self.rcv.write_flag = True
+            self.status_label.setText(t('window.status_run'))
+            self.status_label.setStyleSheet("QLabel { color : red; }")
+            self.rcv.start_running(self.marker)
+            self.start_animation()
+        except RuntimeError as exc:
+            self._show_connection_error(exc)
 
     def on_checkpoint_button(self):
         if self.rcv.init_flag:
@@ -209,18 +234,44 @@ class ApplicationWindow(QMainWindow):
 
     def on_calib_button(self):
         self.marker = b'c'
-        self.reset()
-        self.rcv.init_flag = True
-        self.rcv.write_flag = False
-        self.status_label.setText(t('window.status_calib'))
-        self.status_label.setStyleSheet("QLabel { color : green; }")
-        self.rcv.start_running(self.marker)
-        self.start_animation()
+        try:
+            self.reset()
+            self.rcv.init_flag = True
+            self.rcv.write_flag = False
+            self.status_label.setText(t('window.status_calib'))
+            self.status_label.setStyleSheet("QLabel { color : green; }")
+            self.rcv.start_running(self.marker)
+            self.start_animation()
+        except RuntimeError as exc:
+            self._show_connection_error(exc)
 
     def on_stop_button(self):
         self.status_label.setText(t('window.status_stopped'))
         self.status_label.setStyleSheet("QLabel { color : orange; }")
-        self.reset()
+        try:
+            self.reset()
+        except RuntimeError as exc:
+            self._show_connection_error(exc)
+
+    def _show_connection_error(self, exc):
+        """A board write failed (see Board._write_marker()): print the
+        already-translated, actionable message and surface it in the
+        status bar too, instead of letting it crash the button-click slot
+        uncaught with a raw traceback and no visible GUI feedback."""
+        print(exc)
+        self.status_label.setText(str(exc))
+        self.status_label.setStyleSheet("QLabel { color : red; }")
+
+    def on_sync_command(self, command):
+        """Handles a start/stop/quit trigger from sync_trigger.py (see
+        mylib/sync.py); only bound when this window was launched with
+        -sync."""
+        if command == 'start':
+            self.on_start_button()
+        elif command == 'stop':
+            self.on_stop_button()
+        elif command == 'quit':
+            self.on_quit_button()
 
     def on_quit_button(self):
         self.quit(t('window.quit_pressed'))
@@ -229,6 +280,8 @@ class ApplicationWindow(QMainWindow):
         self.quit(t('window.close_pressed'))
 
     def quit(self, msg):
+        if self.sync:
+            self.sync.close()
         self.board.ser.write(b"q")  # quit... must run before self.reset()
         self.reset()
         print(t('window.quit_log', msg=msg))

@@ -16,10 +16,10 @@ vector<int> indx, i2c_pinno, i2c_addr;
 //vector<int> indx, i2c_pinno={20, 18}, i2c_addr={0x2F};
 vector<float> amp_max, tuning_width;
 uint8_t  numCh, num_avg, time_unit, dpm_tmp;
-uint16_t signal_max, calib_int_msec, calib_waiting;
+uint16_t signal_max, calib_int_msec;
 uint8_t  calib_max_iters;
 uint16_t calib_settle_tol;
-uint32_t time_interval, calib_interval;
+uint32_t time_interval, calib_interval, calib_waiting;
 vector<int> dpm(3, 0x7F), dpm0(3, 0xFF); // !!Can not set initial value 127 (digital potentio-meter value 0--255)
 vector<uint16_t> range={0,0,0}, range_max={0,0,0}, range_min={0,0,0};
 
@@ -40,10 +40,29 @@ void initialSetupParam(char ch, string str){
   dpm0           = get_int_list(params, "dpm",    "-1,-1,-1");
   i2c_addr       = get_int_list(params, "i2c_addr",  "0x50,");  // addr of MCP4018 = 0x2F; X95840W = 0x50
   amp_max        = get_float_list(params, "calib_amplitude_max", "10,20,30");
-  tuning_width   = get_float_list(params, "calib_tuning_width",  "5,5,5");
-  calib_waiting  = get_int(params,        "calib_waiting", 800);  //delay time:                   default 800msec
+  // No longer exposed as a per-run PC setting (the shipped .ini files
+  // send calib_amplitude_max but not this) -- 5% turned out too tight for
+  // real hardware, widened to 15% and fixed here as the default so it
+  // isn't something to reconsider on every run. Still overridable by
+  // uncommenting calib_tuning_width in the .ini if it's ever needed.
+  tuning_width   = get_float_list(params, "calib_tuning_width",  "15,15,15");
   calib_int_msec = get_int(params,        "calib_int_msec", 4000); //max&min search time interval: default 4000msec
   calib_interval = calib_int_msec * ((time_unit == 6) ? 1000 : 1);
+  // Same time_unit scaling as calib_interval above -- without it,
+  // wait_for_settle()'s `elapsed` (accumulated in the same units as
+  // calib_interval/probe_len, i.e. microseconds when time_unit==6) blew
+  // past an unscaled millisecond-valued calib_waiting after a single
+  // ~0.5s probe, so the settle check could never actually compare two
+  // consecutive probes -- it always fell through as if it had timed out
+  // right after the first one, meaning the circuit was never actually
+  // given time to catch up to a wiper change before being measured.
+  // Default allows about 12 full-length probes (see wait_for_settle()) at
+  // the default calib_int_msec above; scale calib_waiting along with
+  // calib_int_msec if you change it, so several probes still fit. (Only
+  // used if the PC doesn't send calib_waiting at all -- the shipped .ini
+  // files always send it explicitly, currently 25000.)
+  calib_waiting  = get_int(params,        "calib_waiting", 25000) *
+                   ((time_unit == 6) ? 1000 : 1);  //delay time: default 25000msec
   calib_max_iters = get_int(params,       "calib_max_iters", 10); // bisection steps per calibration run
   calib_settle_tol = get_int(params,      "calib_settle_tol", 30); // ADC counts: consecutive probes within this much count as "settled"
   //
@@ -108,7 +127,7 @@ void changeParam(char ch){
 }
 
 // Blocks (streaming samples throughout, staying responsive to new serial
-// commands) until two consecutive short probe windows agree on every
+// commands) until two consecutive probe windows agree on every
 // not-yet-converged channel's signal range within calib_settle_tol ADC
 // counts, or until calib_waiting has elapsed. Real hardware showed a
 // nonzero, not precisely known lag between an I2C write to the
@@ -118,11 +137,26 @@ void changeParam(char ch){
 // the wait (the caller should abort, same as everywhere else in this
 // file); running out of time without stabilizing is not an error --
 // calibration proceeds with whatever the last probe read.
+//
+// Each probe is a full calib_interval long -- the same length used for
+// the actual measurement below, not a fraction of it. A recorded trace
+// from real hardware showed the signal doing three different things
+// after a wiper write: staying essentially flat for several hundred ms
+// (dead time) before responding at all, then a ~1-1.5s transient, before
+// settling into a bounded periodic swing (the front end's own PPG-style
+// pulsatile signal). A probe window shorter than that swing's period
+// can't measure a comparable peak-to-peak range from one probe to the
+// next even once the circuit has genuinely settled -- it was landing on
+// different phases of the same swing and reading them as "unstable", or
+// worse, coincidentally agreeing during the initial dead time and
+// declaring settled before the circuit had even started to respond.
+// calib_waiting needs to allow for several of these full-length probes,
+// not fractions of one.
 bool wait_for_settle(uint32_t tm, bool done[3]) {
   uint16_t prev_range[3];
   bool have_prev = false;
-  uint32_t probe_len = calib_interval / 4;
-  uint32_t probe_floor = (time_unit == 6) ? 200000UL : 200UL; // >= 0.2s/probe
+  uint32_t probe_len = calib_interval;
+  uint32_t probe_floor = (time_unit == 6) ? 200000UL : 200UL; // >= 0.2s/probe, in case calib_interval is set very small
   if (probe_len < probe_floor) probe_len = probe_floor;
   uint32_t elapsed = 0;
 
@@ -267,6 +301,18 @@ void loop() {
       bin_write((time_unit==6)?(micros()-time0micros):(millis()-time0millis), usig.binary, 2*numCh);
       break;
     case 2:
-      calibrating((time_unit == 6) ? time0micros : time0millis); break;
+      calibrating((time_unit == 6) ? time0micros : time0millis);
+      // calibrating() is one-shot: it already ran to completion (all
+      // channels converged, or calib_max_iters was reached) by the time
+      // it returns, or was interrupted early by a new pending command
+      // (still unread in the serial buffer at this point). Either way,
+      // ok must not stay 2, or the next loop() iteration would call
+      // calibrating() all over again from scratch (lo/hi/done all reset)
+      // forever -- calibration would never actually finish. If a new
+      // command is pending, the dispatch at the top of the next loop()
+      // iteration runs before this value is used and overwrites it
+      // correctly regardless.
+      ok = 0;
+      break;
   }
 }

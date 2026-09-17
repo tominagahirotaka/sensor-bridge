@@ -25,10 +25,10 @@ std::map<string, string> params;  //  parameters between this board and PC
 vector<int> indx, i2c_pinno, i2c_addr;
 vector<float> amp_max, tuning_width;
 uint8_t  numCh, num_avg, time_unit, dpm_tmp;
-uint16_t signal_max, calib_int_msec, calib_waiting;
+uint16_t signal_max, calib_int_msec;
 uint8_t  calib_max_iters;
 uint16_t calib_settle_tol;
-uint32_t time_interval, calib_interval;
+uint32_t time_interval, calib_interval, calib_waiting;
 vector<int> dpm(3, 0x7F), dpm0(3, 0xFF); // !!Can not set initial value 127 (digital potentio-meter value 0--255)
 vector<uint16_t> range={0,0,0}, range_max={0,0,0}, range_min={0,0,0};
 
@@ -62,10 +62,23 @@ void initialSetupParam(char ch, string str){
   dpm0           = get_int_list(params, "dpm",    "-1,-1,-1");
   i2c_addr       = get_int_list(params, "i2c_addr",  "0x50,");  // X95840W = 0x50
   amp_max        = get_float_list(params, "calib_amplitude_max", "10,20,30");
-  tuning_width   = get_float_list(params, "calib_tuning_width",  "5,5,5");
-  calib_waiting  = get_int(params,        "calib_waiting", 800);
+  // No longer exposed as a per-run PC setting (the shipped .ini files
+  // send calib_amplitude_max but not this) -- 5% turned out too tight for
+  // real hardware, widened to 15% and fixed here as the default so it
+  // isn't something to reconsider on every run. Still overridable by
+  // uncommenting calib_tuning_width in the .ini if it's ever needed.
+  tuning_width   = get_float_list(params, "calib_tuning_width",  "15,15,15");
   calib_int_msec = get_int(params,        "calib_int_msec", 4000);
   calib_interval = calib_int_msec * ((time_unit == 6) ? 1000 : 1);
+  // Same time_unit scaling as calib_interval above -- see
+  // PICO_DPG_X95840W.ino for why an unscaled calib_waiting silently
+  // disabled the settle check. Default allows about 12 full-length probes
+  // (see wait_for_settle()) at the default calib_int_msec above; scale
+  // calib_waiting along with calib_int_msec if you change it. (Only used
+  // if the PC doesn't send calib_waiting at all -- the shipped .ini files
+  // always send it explicitly, currently 25000.)
+  calib_waiting  = get_int(params,        "calib_waiting", 25000) *
+                   ((time_unit == 6) ? 1000 : 1);
   calib_max_iters = get_int(params,       "calib_max_iters", 10); // bisection steps per calibration run
   calib_settle_tol = get_int(params,      "calib_settle_tol", 30); // ADC counts: consecutive probes within this much count as "settled"
   // LIS3DH x2
@@ -172,7 +185,7 @@ void accel_read() {
 }
 
 // Blocks (streaming samples throughout, staying responsive to new serial
-// commands) until two consecutive short probe windows agree on every
+// commands) until two consecutive probe windows agree on every
 // not-yet-converged channel's signal range within calib_settle_tol ADC
 // counts, or until calib_waiting has elapsed. Real hardware showed a
 // nonzero, not precisely known lag between an I2C write to the
@@ -182,11 +195,16 @@ void accel_read() {
 // the wait (the caller should abort, same as everywhere else in this
 // file); running out of time without stabilizing is not an error --
 // calibration proceeds with whatever the last probe read.
+//
+// Each probe is a full calib_interval long -- see PICO_DPG_X95840W.ino's
+// wait_for_settle() for why a shorter probe can't reliably compare
+// consecutive readings once the front end's own pulsatile signal is
+// involved.
 bool wait_for_settle(uint32_t tm, bool done[3], uint16_t dpm_offset) {
   uint16_t prev_range[3];
   bool have_prev = false;
-  uint32_t probe_len = calib_interval / 4;
-  uint32_t probe_floor = (time_unit == 6) ? 200000UL : 200UL; // >= 0.2s/probe
+  uint32_t probe_len = calib_interval;
+  uint32_t probe_floor = (time_unit == 6) ? 200000UL : 200UL; // >= 0.2s/probe, in case calib_interval is set very small
   if (probe_len < probe_floor) probe_len = probe_floor;
   uint32_t elapsed = 0;
 
@@ -336,6 +354,10 @@ void loop() {
       break;
     }
     case 2:
-      calibrating((time_unit == 6) ? time0micros : time0millis); break;
+      calibrating((time_unit == 6) ? time0micros : time0millis);
+      // one-shot: see PICO_DPG_X95840W.ino's case 2 for why ok must not
+      // stay 2, or calibrating() would be re-run from scratch forever.
+      ok = 0;
+      break;
   }
 }

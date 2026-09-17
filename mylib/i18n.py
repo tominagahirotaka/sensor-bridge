@@ -45,6 +45,14 @@ MESSAGES = {
         "en": "UI language ({langs})",
         "ja": "表示言語（{langs}）",
     },
+    "help.sync": {
+        "en": "listen for start/stop/quit triggers from sync_trigger.py "
+              "(to start/stop/quit this window together with other "
+              "sync-enabled get.py/get_camera.py windows)",
+        "ja": "sync_trigger.pyからの開始/停止/終了トリガーを待ち受ける"
+              "（他のsync有効なget.py/get_camera.pyウィンドウと"
+              "同時に開始/停止/終了するため）",
+    },
     "get.connected_boards": {
         "en": "[INFO] Connected boards: {boards}",
         "ja": "[INFO] 接続中のBoard: {boards}",
@@ -82,6 +90,10 @@ MESSAGES = {
     "window.status_calib": {
         "en": "Calibration (not recording)",
         "ja": "Calibration（記録なし）",
+    },
+    "window.status_calib_done": {
+        "en": "Calibration finished -- press Stop, then Test/Run",
+        "ja": "Calibration終了 -- Stopを押してからTest/Runへ",
     },
     "window.status_stopped": {
         "en": "Stopped",
@@ -152,6 +164,27 @@ MESSAGES = {
         "ja": "[ERROR] {port}でboard_programハンドシェイクが数回試行しても完了しません"
               "でした。Boardが固まっている可能性があります。一度抜き差ししてください。",
     },
+    "comm.setparams_retry": {
+        "en": "[WARN] setparams response attempt {attempt} was malformed "
+              "({raw!r}), retrying...",
+        "ja": "[WARN] setparams応答の{attempt}回目の試行が不正な形式でした"
+              "（{raw!r}）。再試行します...",
+    },
+    "comm.setparams_failed": {
+        "en": "[ERROR] Could not get a well-formed setparams response from "
+              "{port} after several attempts; the board may be stuck. Try "
+              "unplugging and reconnecting it.",
+        "ja": "[ERROR] {port}から正しい形式のsetparams応答が数回試行しても得られません"
+              "でした。Boardが固まっている可能性があります。一度抜き差ししてください。",
+    },
+    "comm.write_failed": {
+        "en": "[ERROR] Could not send the command to {port} ({err}); the "
+              "board may have disconnected. Try unplugging and reconnecting "
+              "it, then press Test/Run again.",
+        "ja": "[ERROR] {port}へのコマンド送信に失敗しました（{err}）。Boardが切断"
+              "された可能性があります。一度抜き差ししてから、Test/Runを再度押して"
+              "ください。",
+    },
     "comm.thread_no_write_start": {
         "en": "[INFO] Thread: [get_data_no_write] Start",
         "ja": "[INFO] Thread: [get_data_no_write] 開始",
@@ -169,6 +202,16 @@ MESSAGES = {
               "Stopping acquisition -- press Test/Run to reconnect.",
         "ja": "[ERROR] Serial読み込みに失敗しました({err})。Boardが切断された可能性があります。"
               "取得を停止します -- 再接続するにはTest/Runを押してください。",
+    },
+    "comm.thread_short_read": {
+        "en": "[INFO] Board stopped sending data (got {got}/{expected} bytes after "
+              "the read timeout) -- it may have finished a one-shot operation "
+              "(e.g. calibration converging or reaching calib_max_iters). "
+              "Waiting; press Stop when done.",
+        "ja": "[INFO] Boardからのデータ送信が止まりました（タイムアウト後に{got}/"
+              "{expected}バイトしか届きませんでした）。Calibrationの収束や"
+              "calib_max_iters到達など、一度きりの処理が終わった可能性があります。"
+              "待機します。終了する場合はStopを押してください。",
     },
 
     # --- plot.py: argparse description & --config ---

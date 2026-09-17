@@ -109,10 +109,14 @@ class Header:
 
 
 class ReceiveCommon:
-    def __init__(self, args, board):
+    def __init__(self, args, board, num_boards=1):
         self.p = Header()                 # Instance of Header class (object holding the info written at the start of the saved file)
         self.init_flag, self.write_flag = False, False        # set flags
         self.p.board['device'] = board
+        # Read by FileIO.write_open() to decide whether to disambiguate
+        # recording filenames by port -- only needed when more than one
+        # board was connected at once (see get.py's main()).
+        self.p.board['multi_board'] = num_boards > 1
         self.board = Board(self.p, args, True)        # Instance of Board class
         self.board.loop_th = True         # Thread loop
         with _handshake_lock():
@@ -182,8 +186,8 @@ class ReceiveCommon:
 
 
 class Receive(ReceiveCommon):
-    def __init__(self, args, board):
-        super().__init__(args, board)
+    def __init__(self, args, board, num_boards=1):
+        super().__init__(args, board, num_boards)
 
     # Start measurement (Qt)
     def start_running(self, marker):
@@ -240,6 +244,15 @@ class Board:
             self.ser_data = None          # explicitly initialize to None
             self._data_ready = threading.Event()
             self._new_data_event = threading.Event()
+            # Set by get_data_no_write()/get_data_and_write() (reader
+            # thread) the moment the board is first found to have gone
+            # quiet -- e.g. a caliBrate run converging. Polled and
+            # consumed by window.py's update() (Qt main thread) to show a
+            # one-shot "calibration finished" status message; a plain
+            # bool is safe here the same way self.ser_data/self.loop_th
+            # already are shared across threads without a lock elsewhere
+            # in this class.
+            self.went_idle = False
 
             print(f'[INFO] {self.ser.port=}')
 
@@ -335,17 +348,79 @@ class Board:
                 lines += oneline[:-1]
         return lines
 
+    def _parse_setparams(self, raw):
+        """key=value;key=value;... -> dict, or raises ValueError. Split on
+        only the first '=' per entry: some values contain '=' themselves
+        (e.g. LIS3DH's func field's lambda body has 'x>=32768')."""
+        return dict(k.split('=', 1) for k in raw.split(';'))
+
+    def _reset_buffers(self):
+        """Best-effort self.ser.reset_output_buffer()/reset_input_buffer().
+        Like _set_timeout() above, these aren't plain no-fail calls -- they
+        do a real termios.tcflush() under the hood, which raises if the
+        device has just disconnected. That's harmless to ignore here: they
+        are only a pre-write cleanup of stale bytes, and a truly dead port
+        is properly reported instead (a clean RuntimeError, not a raw
+        exception) by _write_marker() below, which every caller of this
+        method calls right afterward.
+        Without this, a board hiccup at exactly this moment crashed every
+        button handler uncaught (they all call this via reset() ->
+        stop_running() -> connect_serial(b'r') first), not just the one
+        actually reading/writing data."""
+        try:
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            pass
+
+    def _write_marker(self, marker):
+        """self.ser.write(marker), converting a disconnect into a clean,
+        catchable RuntimeError instead of letting the raw SerialException/
+        OSError reach the caller uncaught. On real hardware, a board that
+        drops out right as a button is pressed made this write() itself
+        raise -- unlike the read side (get_data_no_write()/
+        get_data_and_write()), which already handles a disconnect
+        cleanly, nothing up this call chain (connect_serial() <-
+        stop_running()/start_running() <- reset()/window.py's button
+        handlers) caught it, so the exception crashed straight through the
+        Qt button-click slot."""
+        try:
+            self.ser.write(marker)
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS) as exc:
+            raise RuntimeError(
+                t('comm.write_failed', port=self.p.board['device'][0], err=exc))
+
     def connect_serial(self, marker):
-        self.ser.write(marker)  # b"s"... start or test, b"c"... calibration
-        self.ser.reset_output_buffer()
-        self.ser.reset_input_buffer()
+        # Flush *before* writing, not after: some boards (e.g. X95840W,
+        # which echoes every received command character back immediately)
+        # can start replying fast enough that a flush issued right after
+        # the write races against -- and truncates -- the genuine response
+        # to marker, instead of just clearing out-of-date leftovers from
+        # before this call. Nothing has been requested yet at this point,
+        # so it's always safe to discard whatever is currently buffered.
+        self._reset_buffers()
+        self._write_marker(marker)  # b"s"... start or test, b"c"... calibration
         if marker == b'r':
             return
-        # Wait for the board's response
+        # Wait for the board's response. A truncated/garbled response here
+        # (seen on real hardware despite the flush reordering above --
+        # cause not fully pinned down, possibly USB-level timing outside
+        # this code's control) used to crash with an unhandled
+        # ValueError/IndexError; retry a couple of times instead.
         board_params = self._waiting('setparams')
-        # Some values themselves contain '=' (e.g. LIS3DH's func `x>=32768`),
-        # so split on only the first '='.
-        self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
+        for attempt in range(3):
+            try:
+                parsed = self._parse_setparams(board_params)
+                break
+            except ValueError:
+                print(t('comm.setparams_retry', attempt=attempt + 1, raw=board_params))
+                if attempt == 2:
+                    raise RuntimeError(
+                        t('comm.setparams_failed', port=self.p.board['device'][0]))
+                self._reset_buffers()
+                self._write_marker(marker)
+                board_params = self._waiting('setparams')
+        self.p.env_set.update(parsed)
         # Turn the variables received from the board into self.<name> attributes
         self.set_self_vars()
         self._build_struct()
@@ -423,18 +498,77 @@ class Board:
         print(f'[INFO] {pc_params=}')
         self.ser.write(marker)     # b"i"... initialize, b"a" ... ReInitialize (Again)
         self.ser.write(bytes(pc_params, encoding="utf-8"))
-        # Wait for the board's 'setparams' response
+        # Wait for the board's 'setparams' response. See connect_serial()
+        # for why a truncated/garbled response is retried instead of
+        # crashing outright.
         board_params = self._waiting('setparams')
+        for attempt in range(3):
+            try:
+                parsed = self._parse_setparams(board_params)
+                break
+            except ValueError:
+                print(t('comm.setparams_retry', attempt=attempt + 1, raw=board_params))
+                if attempt == 2:
+                    raise RuntimeError(
+                        t('comm.setparams_failed', port=self.p.board['device'][0]))
+                self.ser.reset_input_buffer()
+                self.ser.write(marker)
+                self.ser.write(bytes(pc_params, encoding="utf-8"))
+                board_params = self._waiting('setparams')
         print(f'[INFO] {board_params=}')
-        # Some values themselves contain '=' (e.g. LIS3DH's func `x>=32768`),
-        # so split on only the first '='.
-        self.p.env_set.update(dict([k.split('=', 1) for k in board_params.split(';')]))
+        self.p.env_set.update(parsed)
         # Turn the variables received from the board into self.<name> attributes
         self.set_self_vars()
         self._build_struct()
 
+    def _set_timeout(self, value):
+        """Best-effort self.ser.timeout assignment. Setting pyserial's
+        .timeout isn't a plain attribute write -- it triggers a real port
+        reconfiguration (termios.tcsetattr under the hood), which can
+        itself raise if the device has just disconnected (e.g. right
+        after a read already failed with a SerialException, which is
+        exactly when get_data_no_write()/get_data_and_write() below try
+        to restore the original timeout during cleanup). Silently
+        ignored, the same way the reset_*_buffer()/write(b"r") cleanup
+        right after this already tolerates a broken port.
+        """
+        try:
+            self.ser.timeout = value
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            pass
+
+    def _steady_state_timeout(self):
+        """A read() timeout sized to the board's own configured sample
+        interval (self.real_time_interval, always in *microseconds* --
+        see any firmware .ino's changeParam()/params["real_time_interval"]),
+        instead of the flat default set once in __init__ (16s).
+
+        get_data_no_write()/get_data_and_write() detect the board going
+        idle (e.g. a calibration run converging) by a short/empty read
+        after self.ser.read()'s own timeout elapses, then shrink the
+        timeout so later idle checks are fast. But that shrink only
+        happens *after* the first slow detection -- if the user reacts
+        (presses Stop, or Test/Run right after caliBrate finishes)
+        within that first window, reset()'s th.join() still has to wait
+        out however much of the original 16s was left, which is exactly
+        the "6 second wait" symptom this fixes. Sizing the timeout to
+        the real sample interval up front (generous margin, 1s floor so
+        normal jitter never false-triggers, 16s ceiling so a board with
+        a genuinely slow configured interval never waits longer than
+        before) makes even the *first* idle detection fast.
+        """
+        try:
+            margin = 20 * self.real_time_interval / 1e6
+        except (AttributeError, TypeError, ValueError):
+            return self.ser.timeout
+        return max(1.0, min(margin, 16.0))
+
     def get_data_no_write(self):
         print(t('comm.thread_no_write_start'))
+        warned_idle = False
+        original_timeout = self.ser.timeout
+        steady_timeout = self._steady_state_timeout()
+        self._set_timeout(steady_timeout)
         while self.loop_th:
             try:
                 self.ser_data = self.ser.read(self.one_data_size)
@@ -444,8 +578,33 @@ class Board:
                 print(t('comm.thread_serial_error', err=exc))
                 self.loop_th = False
                 break
+            if len(self.ser_data) != self.one_data_size:
+                # A short/empty read (most commonly: the board legitimately
+                # stopped sending anything, e.g. a calibration run that
+                # finished converging or exhausted calib_max_iters) after
+                # self.ser.read()'s own timeout elapsed. Passing this
+                # through to convert() would crash on the size mismatch;
+                # skip it and keep waiting instead -- the board may resume,
+                # and Stop is still the way to end this deliberately.
+                if not warned_idle:
+                    print(t('comm.thread_short_read', got=len(self.ser_data), expected=self.one_data_size))
+                    warned_idle = True
+                    self.went_idle = True
+                    # reset()'s th.join() (see window.py) blocks the GUI
+                    # thread until this loop notices loop_th=False, which
+                    # only happens between read() calls -- so once the
+                    # board's gone quiet, shrink the read timeout well
+                    # below the steady-state one (generous, for real
+                    # streaming) so Stop takes effect in about a second
+                    # instead of however long that was.
+                    self._set_timeout(min(steady_timeout, 1))
+                continue
+            if warned_idle:
+                self._set_timeout(steady_timeout)
+            warned_idle = False
             self._data_ready.set()      # to release the initial wait
             self._new_data_event.set()  # notify that new data has arrived
+        self._set_timeout(original_timeout)
         try:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
@@ -460,6 +619,10 @@ class Board:
         print(t('comm.thread_no_write_stopped'))
 
     def get_data_and_write(self, f):
+        warned_idle = False
+        original_timeout = self.ser.timeout
+        steady_timeout = self._steady_state_timeout()
+        self._set_timeout(steady_timeout)
         while self.loop_th:
             try:
                 self.ser_data = self.ser.read(self.one_data_size)
@@ -467,9 +630,24 @@ class Board:
                 print(t('comm.thread_serial_error', err=exc))
                 self.loop_th = False
                 break
+            if len(self.ser_data) != self.one_data_size:
+                # See get_data_no_write() for why this is skipped rather
+                # than passed to convert() (which would crash) or written
+                # to the recording (which expects fixed-width frames), and
+                # for why the read timeout is shrunk once this happens.
+                if not warned_idle:
+                    print(t('comm.thread_short_read', got=len(self.ser_data), expected=self.one_data_size))
+                    warned_idle = True
+                    self.went_idle = True
+                    self._set_timeout(min(steady_timeout, 1))
+                continue
+            if warned_idle:
+                self._set_timeout(steady_timeout)
+            warned_idle = False
             self._data_ready.set()
             self._new_data_event.set()  # notify that new data has arrived
             f.write(self.ser_data)
+        self._set_timeout(original_timeout)
         try:
             self.ser.reset_output_buffer()
             self.ser.reset_input_buffer()
@@ -495,17 +673,57 @@ class Board:
         return out.reshape(1, -1)
 
     def data_stream(self):
-        self._data_ready.wait()
+        # self._data_ready/self.ser_data are Board-level state that outlives
+        # a single start_read_thread() session (a fresh data_stream()
+        # generator is created on every Test/Run/caliBrate button press,
+        # but the Event and buffer are the same objects throughout the
+        # app's life). If the wire-protocol struct size just changed --
+        # e.g. caliBrate appends 3 extra per-sample dpm(u1) fields that
+        # Test/Run doesn't send, so one_data_size/_struct differ between
+        # them -- self.ser_data can still hold a leftover buffer sized for
+        # the *previous* mode at the moment this generator starts, before
+        # the reader thread has delivered a first sample in the new size.
+        # convert() would then crash on this very first line with a
+        # struct.error, permanently killing this generator: every later
+        # next(stream) call raises StopIteration instead, which
+        # FigureQtPG.update() doesn't guard against, freezing the whole
+        # GUI (plot, HR, dpm -- everything) until the next button press.
+        # Loop past any stale, wrong-sized buffer instead of trusting
+        # whatever self.ser_data happens to hold.
+        while True:
+            self._data_ready.wait()
+            if len(self.ser_data) == self._total_size:
+                break
+            self._data_ready.clear()
         ser_data0 = self.ser_data
         init_val = self.convert(ser_data0)
         init_val[0][0] = init_val[0][len(self.structure)] = 0
         self.data = np.full((2, len(self.structure) * 2), init_val)
+        got_first_sample = False
         while True:
-            # Wait on an Event instead of polling
-            self._new_data_event.wait()
+            # Wait on an Event instead of polling. This generator is
+            # driven by FigureQtPG.update() (mylib/Qtutils.py), called by
+            # window.py's update() -- a slot on a 0ms-interval QTimer,
+            # i.e. it runs on the Qt *main* thread. An unbounded wait()
+            # here blocks that thread indefinitely once the board goes
+            # quiet (e.g. a calibration run converging or reaching
+            # calib_max_iters -- see get_data_no_write()/
+            # get_data_and_write()), freezing the entire application (no
+            # repaints, no button clicks, OS "Not Responding") until data
+            # resumes -- a more severe freeze than the reader thread's own
+            # shutdown delay, which those methods already handle
+            # separately. Bounded once at least one real sample has been
+            # yielded, so FigureQtPG.update() can keep assuming the very
+            # first value this generator ever yields is real data, never
+            # the "nothing new yet" sentinel below.
+            timeout = 0.2 if got_first_sample else None
+            if not self._new_data_event.wait(timeout=timeout):
+                yield None
+                continue
             self._new_data_event.clear()  # block until the next data
             if self.ser_data != ser_data0:
                 ser_data0 = self.ser_data
                 self.data[0] = self.data[1]
                 self.data[1] = self.convert(ser_data0)
+                got_first_sample = True
                 yield self.data

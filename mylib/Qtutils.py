@@ -309,6 +309,24 @@ class FigureQtPG:
         symbol = marker_map.get(marker, 'o')
         return (pg.mkPen(color), pg.mkBrush(color), ms, symbol)
 
+    @staticmethod
+    def _calib_target_half_width(calib_amplitude_max, volt, k):
+        """+-half the target peak-to-peak swing (in the same volts the
+        plot itself is drawn in) for port k, or None if it can't be
+        computed (e.g. k out of range, or a malformed value). calib_
+        amplitude_max[k] is a percentage of the ADC's full-scale range
+        (see any firmware .ino's range_max/range_min); converting a
+        *percentage of full scale* into volts only needs the supply
+        voltage, not the ADC resolution -- the full-scale count itself
+        cancels out against the same board.func voltage-conversion
+        coefficient (volt / signal_max) already applied to the plotted
+        trace."""
+        try:
+            target_pct = calib_amplitude_max[k]
+            return (target_pct / 100.0) * float(volt) / 2.0
+        except (IndexError, TypeError, ValueError):
+            return None
+
     def _init_fig(self, figs):
         self.figs, self.args = figs[:-1], figs[-1]
         n_rows, n_cols = np.array(self.figs).shape
@@ -336,6 +354,16 @@ class FigureQtPG:
                                         for dic in lst] for lst in self.figs])
         self.average = [[[0.0 for _ in dic['data']]
                          for dic in lst] for lst in self.figs]
+
+        # Calibration target-amplitude reference lines: for boards that
+        # expose calib_amplitude_max (e.g. DPG_X95840W), a dashed line pair
+        # per port shows +-(target amplitude)/2 around that port's own
+        # live rolling average (self.average, updated in update() below),
+        # so the target peak-to-peak swing can be judged directly against
+        # the plotted trace instead of only from the numeric dpm/HBR
+        # readout. self.calib_target_lines maps k (the figure/port index)
+        # -> (upper_line, lower_line, half_width_in_volts).
+        self.calib_target_lines = {}
 
         COLORS_SET1 = [
             (228, 26, 28),
@@ -416,6 +444,22 @@ class FigureQtPG:
                 self.peaks[k].append([])
                 self._buf_y[k].append([])
 
+                # Calibration target-amplitude reference lines (see
+                # self.calib_target_lines above) -- one pair per port
+                # figure, added to that port's own plot.
+                if (j == 0 and k not in self.calib_target_lines
+                        and hasattr(self.board, 'calib_amplitude_max')
+                        and hasattr(self.board, 'volt')):
+                    half_width = self._calib_target_half_width(
+                        self.board.calib_amplitude_max, self.board.volt, k)
+                    if half_width is not None:
+                        line_pen = pg.mkPen((255, 255, 0), width=1, style=Qt.DashLine)
+                        upper = pg.InfiniteLine(angle=0, pen=line_pen)
+                        lower = pg.InfiniteLine(angle=0, pen=line_pen)
+                        p.addItem(upper)
+                        p.addItem(lower)
+                        self.calib_target_lines[k] = (upper, lower, half_width)
+
                 # legend
                 if dic['legend']:
                     p.addLegend(offset=(0, 0))
@@ -488,7 +532,17 @@ class FigureQtPG:
                     self.peak_interval[k][j][i] = 0.0
 
     def update(self, stream):
-        data_t = next(stream).transpose()
+        new_data = next(stream)
+        if new_data is None:
+            # See mylib/communicate.py's data_stream() -- the board has
+            # gone quiet for a bit; nothing new to plot on this tick.
+            # Return the last known summary values unchanged instead of
+            # touching any plotting/peak-detection state below, which
+            # assumes a genuinely new, distinct sample. The invariant that
+            # data_stream() never yields None before its first real
+            # sample means self._last_result is always already set here.
+            return self._last_result
+        data_t = new_data.transpose()
 
         # Fix the buffer size from the measured dt, only on the first call
         if not self._fs_fixed:
@@ -532,6 +586,12 @@ class FigureQtPG:
                             self.average[k][j][i] = (self.average[k][j][i] * (1 - self._avg_alpha)
                                                      + y_now * self._avg_alpha)
 
+                            if k in getattr(self, 'calib_target_lines', {}):
+                                upper, lower, half_width = self.calib_target_lines[k]
+                                center = self.average[k][j][i]
+                                upper.setValue(center + half_width)
+                                lower.setValue(center - half_width)
+
                             if dat[-1]['peak']:
                                 self._detect_and_record_peak(k, j, i, plot_data[0][-1], y_now)
                         except Exception:
@@ -554,7 +614,8 @@ class FigureQtPG:
                                       f'(occurrence #{err_count[ekey]}):')
                                 traceback.print_exc()
 
-        return data_t.T[[0, -1]].T, self.peak_interval.transpose()[0][0]
+        self._last_result = data_t.T[[0, -1]].T, self.peak_interval.transpose()[0][0]
+        return self._last_result
 
     def _erase_and_write_buffer(self, k, j, i, x_prev, x_now, y_prev, y_now):
         """For plot (k,j,i)'s y buffer, nan-clear a short span just ahead of
