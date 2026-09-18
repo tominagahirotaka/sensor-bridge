@@ -10,9 +10,14 @@ more `python get.py` processes needs no special coordination between them
 handshakes do need to be serialized -- see mylib/communicate.py). See
 README.md's "Webcam capture" section for what this script does and does
 not guarantee about timing relative to sensor recordings.
+
+With multiple cameras connected, `-a`/`--all` opens every detected one at
+once, each in its own window/process, mirroring get.py's own
+one-process-per-board pattern -- see main()/make_window() below.
 """
 
 import argparse
+import multiprocessing
 import platform
 import sys
 
@@ -58,9 +63,12 @@ class CameraWindow(QMainWindow):
         self.start_btn.clicked.connect(self.on_start)
         self.stop_btn = QPushButton('Stop')
         self.stop_btn.clicked.connect(self.on_stop)
+        self.mark_btn = QPushButton('Mark')
+        self.mark_btn.clicked.connect(self.on_mark)
         buttons = QHBoxLayout()
         buttons.addWidget(self.start_btn)
         buttons.addWidget(self.stop_btn)
+        buttons.addWidget(self.mark_btn)
         central = QWidget()
         layout = QVBoxLayout(central)
         layout.addWidget(self.preview)
@@ -79,7 +87,9 @@ class CameraWindow(QMainWindow):
         self.preview.setPixmap(QPixmap.fromImage(img).scaled(
             self.preview.width(), self.preview.height(), Qt.KeepAspectRatio))
         if self.cam.is_recording():
-            self.status.showMessage(f'Run (recording) -- {len(self.cam.timestamps)} frames')
+            self.status.showMessage(
+                f'Run (recording) -- {len(self.cam.timestamps)} frames, '
+                f'{len(self.cam.marks)} marks')
         else:
             self.status.showMessage('Preview (not recording)')
 
@@ -94,14 +104,21 @@ class CameraWindow(QMainWindow):
             return
         self.cam.stop_recording()
 
+    def on_mark(self):
+        self.cam.mark()  # no-op while not recording; update_frame()'s status text reflects it
+
     def on_sync_command(self, command):
-        """Handles a start/stop/quit trigger from sync_trigger.py (see
+        """Handles a run/stop/mark/quit trigger from sync_trigger.py (see
         mylib/sync.py); only bound when this window was launched with
-        -sync."""
-        if command == 'start':
+        -sync. 'test' and 'calibrate' (meaningful only for get.py boards)
+        are simply not handled here and are ignored, same as any other
+        unrecognized command."""
+        if command == 'run':
             self.on_start()
         elif command == 'stop':
             self.on_stop()
+        elif command == 'mark':
+            self.on_mark()
         elif command == 'quit':
             self.close()  # triggers closeEvent() -> cam/sync cleanup
 
@@ -111,18 +128,34 @@ class CameraWindow(QMainWindow):
         self.cam.close()
 
 
+def make_window(argv, camera_index, out_dir, sync=False):
+    """Create and run one camera's QApplication/window/event loop. Called
+    directly for the single-camera case, or as a multiprocessing.Process
+    target (one process per camera, mirroring get.py's own
+    one-process-per-board pattern in make_window()/main() there) for -a."""
+    app = QApplication(['sensor-bridge-camera'] + list(argv[1:]))
+    app.setDesktopFileName('sensor-bridge-camera')
+    app.setWindowIcon(QIcon('icon.png'))
+    window = CameraWindow(camera_index, out_dir, sync=sync)
+    window.show()
+    sys.exit(app.exec_())
+
+
 def main():
     parser = argparse.ArgumentParser(description='sensor-bridge webcam capture companion')
     parser.add_argument('-c', '--camera', type=int, default=0,
-                        help='camera index to open (default: 0)')
+                        help='camera index to open (default: 0); ignored if -a is given')
+    parser.add_argument('-a', '--all', action='store_true',
+                        help='open every detected camera at once (see --list), each in '
+                             'its own window/process, instead of a single -c index')
     parser.add_argument('-o', '--out', default='data_camera',
                         help='output directory for recordings (default: data_camera)')
     parser.add_argument('-v', '--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('--list', action='store_true',
                         help='list available camera indices and exit')
     parser.add_argument('-sync', '--sync', action='store_true',
-                        help='listen for start/stop/quit triggers from sync_trigger.py '
-                             '(to start/stop/quit this window together with other '
+                        help='listen for run/stop/mark/quit triggers from sync_trigger.py '
+                             '(to run/stop/mark/quit this window together with other '
                              'sync-enabled get.py/get_camera.py windows)')
     args = parser.parse_args()
 
@@ -131,12 +164,24 @@ def main():
         print(f'Available cameras: {cams}' if cams else 'No cameras found.')
         return
 
-    app = QApplication(['sensor-bridge-camera'] + sys.argv[1:])
-    app.setDesktopFileName('sensor-bridge-camera')
-    app.setWindowIcon(QIcon('icon.png'))
-    window = CameraWindow(args.camera, args.out, sync=args.sync)
-    window.show()
-    sys.exit(app.exec_())
+    if args.all:
+        # 'spawn', not the Linux default 'fork': a forked child inheriting
+        # this process's already-initialized Qt/OpenCV state is exactly
+        # the kind of thing get.py's own multiprocessing setup (see its
+        # main()) avoids for pyserial, for the same reason -- a fresh
+        # interpreter per camera is the safer default here too.
+        multiprocessing.set_start_method('spawn')
+        cams = list_cameras()
+        if not cams:
+            print('No cameras found.')
+            return
+        print(f'Opening {len(cams)} camera(s): {cams}')
+        for idx in cams:
+            multiprocessing.Process(
+                target=make_window, args=(sys.argv, idx, args.out, args.sync)).start()
+        return
+
+    make_window(sys.argv, args.camera, args.out, args.sync)
 
 
 if __name__ == '__main__':

@@ -327,6 +327,26 @@ MESSAGES = {
         "en": "Save Graph Data",
         "ja": "グラフDataの保存先",
     },
+    "plot.gui.save_image_dialog_title": {
+        "en": "Save Graph Image",
+        "ja": "グラフ画像の保存先",
+    },
+    "plot.gui.save_region_select_checkbox": {
+        "en": "Include Region Select row",
+        "ja": "Region Select行も保存する",
+    },
+    "plot.gui.save_region_select_checkbox_tip": {
+        "en": "Include the bottom Region Select (full-range overview) row in the saved image",
+        "ja": "保存する画像に、最下段のRegion Select（全体表示）行も含めます",
+    },
+    "plot.save_image_eps_needs_pdftops": {
+        "en": "Saving as EPS requires the 'pdftops' command-line tool (from "
+              "poppler-utils), which was not found on this system. Try PDF, "
+              "SVG, or PNG instead, or install poppler-utils.",
+        "ja": "EPS形式での保存には'pdftops'コマンド（poppler-utils付属）が必要ですが、"
+              "見つかりませんでした。代わりにPDF、SVG、PNGをお試しいただくか、"
+              "poppler-utilsをインストールしてください。",
+    },
     "plot.gui.save_csv_checkbox": {
         "en": "Also save CSV files",
         "ja": "CSVファイルも保存する",
@@ -359,6 +379,11 @@ MESSAGES = {
     "plot.gui.open_file_tip": {"en": "Open a file (Ctrl+O)", "ja": "ファイルを開く(Ctrl+O)"},
     "plot.gui.save_graph": {"en": "Save Graph", "ja": "グラフを保存"},
     "plot.gui.save_graph_tip": {
+        "en": "Save the displayed graph as an image (PDF or PNG)",
+        "ja": "表示されているグラフを画像として保存する(PDFまたはPNG)",
+    },
+    "plot.gui.save_data": {"en": "Save Data", "ja": "データを保存"},
+    "plot.gui.save_data_tip": {
         "en": "Save the displayed graph's data to Excel (Ctrl+S)",
         "ja": "表示されているグラフのDataをexcel保存する(Ctrl+S)",
     },

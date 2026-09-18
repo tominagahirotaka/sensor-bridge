@@ -51,31 +51,134 @@ sketch; see [Adding a new sensor board](#adding-a-new-sensor-board) below.
 
 ### Wireless-capable boards (Pico W / Pico 2 / Pico 2 W)
 
-Prebuilt `.uf2`s for the RP2350-based Pico 2, and the wireless-capable
-Pico W / Pico 2 W, are included under `firmware/` alongside the
-plain-Pico ones (`Analog`, `DPG_X95840W`, `LIS3DH`), built from the same
-sketches with no source changes -- GP26/ADC0 is the same GPIO on RP2040
-and RP2350 (`A0` is defined identically for both in the arduino-pico
-core, confirmed from its variant headers). Whether a front end actually
-works on a *wireless* board, though, depends on the circuit, not just the
-chip:
+Prebuilt `.uf2`s for all four board variants (Pico, the RP2350-based
+Pico 2, and the wireless-capable Pico W / Pico 2 W) are included under
+`firmware/` for every board config, built from the same sketches with no
+source changes -- GP26/ADC0 is the same GPIO on RP2040 and RP2350 (`A0`
+is defined identically for both in the arduino-pico core, confirmed from
+its variant headers). Compiling for four targets is mechanical, but
+*running correctly* is a separate claim that has to be checked on real
+hardware board by board; the two aren't the same guarantee:
+
+| Firmware | Pico | Pico 2 | Pico W | Pico 2 W |
+|---|---|---|---|---|
+| `Analog` | verified | verified | compiled, not yet hardware-tested | verified |
+| `DPG_X95840W` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | verified |
+| `DPG_X95840W_LIS3DHx2` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
+| `LIS3DH_SPI` | verified | compiled, not yet hardware-tested | verified | compiled, not yet hardware-tested |
+| `i2cSHT35` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
+
+"Verified" means flashed to that real board and exercised through
+`get.py`/`plot.py` during development. The "compiled, not yet
+hardware-tested" cells build cleanly (correct FQBN, no compile errors)
+but haven't been flashed to that specific board yet -- treat them as a
+reasonable starting point, not a guarantee, until confirmed. Real-world
+hardware testing of these is planned as follow-up work.
+
+Whether a front end actually works on a *wireless* board, though, also
+depends on the circuit, not just the chip -- this is a separate question
+from "does it compile":
 
 - **X95840W PPG front end** and **LIS3DH accelerometer (SPI)** were
   verified on real Pico W and Pico 2 W hardware and work identically to
   a plain Pico/Pico 2.
-- **A generic single-channel analog microphone front end**
-  (`Analog.ini`; bias resistor + coupling capacitor into the ADC, the
-  same circuit used for the paper's audio example) does not: on both
-  Pico W and Pico 2 W it shows sustained ADC clipping with no
-  correlation to actual sound, reproducible across multiple boards and
-  wiring re-checks, while the identical circuit on a plain Pico/Pico 2
-  is clean. The likely explanation is impedance -- the mic circuit's ADC
-  node is a comparatively high-impedance divider (~5k Ohm Thevenin),
-  while the PPG front end drives the ADC at lower impedance and LIS3DH
-  is a digital SPI link; high-impedance analog nodes are far more
-  susceptible to picking up electrical interference from the onboard
-  wireless radio. A lower-impedance divider and/or shielding the input
-  line would be the likely fix, but this hasn't been tried.
+- **A commercial microphone-amplifier kit** (`Analog.ini`; Akizuki
+  Denshi AE-MICAMP -- an electret condenser mic driving an OPA344
+  op-amp stage at 100x gain, single-supply 2.5-5V, run here from the
+  Pico's own 3.3V rail with its OUT pin wired directly to GP26/ADC0 and
+  GND common, no additional external circuit; the same kit used for the
+  paper's audio example) does not: on both Pico W and Pico 2 W it shows
+  sustained ADC clipping with no correlation to actual sound,
+  reproducible across multiple boards and wiring re-checks, while the
+  identical circuit on a plain Pico/Pico 2 is clean. The mechanism is
+  not conclusively identified. One plausible, unverified contributor:
+  the amplifier's supply is drawn from the same 3.3V rail that also
+  powers the board's onboard wireless chip (CYW43439), so radio-driven
+  current transients on that shared rail could couple into the
+  amplifier's output -- and the kit's headroom is already reduced by
+  running it at 3.3V rather than its datasheet-recommended 5V, which
+  the manufacturer's own documentation notes can cause clipping on its
+  own. This hasn't been measured directly, and other explanations (e.g.
+  proximity to the antenna, PCB layout) are possible. A separately
+  regulated/filtered supply for the amplifier, and/or shielding the
+  input line, would be reasonable things to try, but neither has been.
+
+## Wiring diagrams
+
+Wires are labeled by function (VCC/GND/SDA/SCL/...), not by a specific
+breakout board's physical pin position, so these apply regardless of
+exactly which revision of a module you have -- match the label on the
+diagram to the label printed on your board. Generated by
+[`scripts/generate_wiring_diagrams.py`](scripts/generate_wiring_diagrams.py)
+from the actual `.ini`/firmware pin assignments, so it won't drift from
+the real configs.
+
+Each one below flashes, wires, and runs in three steps.
+
+### LIS3DH (SPI accelerometer)
+
+![Pico to LIS3DH SPI wiring diagram](docs/wiring/lis3dh.svg)
+
+| LIS3DH | Pico |
+|---|---|
+| VCC | 3V3 |
+| GND | GND |
+| CS | GP17 |
+| SCK | GP18 |
+| SDI (MOSI) | GP19 |
+| SDO (MISO) | GP16 |
+
+```bash
+# 1. Flash: hold BOOTSEL, plug in the Pico, then copy the .uf2 onto the
+#    RPI-RP2 drive that appears (it reboots into the new firmware automatically)
+cp firmware/PICO_LIS3DH_SPI.ino.rpipico.uf2 /media/$USER/RPI-RP2/   # adjust the mount path for your OS
+# 2. Wire as shown above
+# 3. Run -- get.py identifies the board from its own firmware self-report
+#    and loads LIS3DH.ini automatically, no flag needed
+python get.py
+```
+
+### SHT35 (temperature & humidity, up to 4 sensors)
+
+![Pico to 4x SHT35 I2C wiring diagram](docs/wiring/sht35.svg)
+
+Two I2C buses, two sensors each, distinguished by the SHT35's own ADDR
+pin (GND -> address 0x44, VDD -> address 0x45); `get.py` auto-detects
+however many of the four are actually connected.
+
+| SHT35 | Pico |
+|---|---|
+| VDD (all 4) | 3V3 |
+| GND (all 4) | GND |
+| #1/#2 SDA | GP20 |
+| #1/#2 SCL | GP21 |
+| #3/#4 SDA | GP18 |
+| #3/#4 SCL | GP19 |
+| #1, #3 ADDR | GND (-> 0x44) |
+| #2, #4 ADDR | VDD (-> 0x45) |
+
+```bash
+cp firmware/PICO_i2cSHT35.ino.rpipico.uf2 /media/$USER/RPI-RP2/
+python get.py
+```
+
+### Microphone (Akizuki AE-MICAMP)
+
+![Pico to AE-MICAMP microphone wiring diagram](docs/wiring/mic.svg)
+
+The same setup used for the paper's audio example (see "Wireless-capable
+boards" above for why this one isn't recommended on a Pico W/Pico 2 W).
+
+| AE-MICAMP (JP1) | Pico |
+|---|---|
+| VCC | 3V3 |
+| GND | GND |
+| OUT | GP26 (ADC0) |
+
+```bash
+cp firmware/PICO_Analog.ino.rpipico.uf2 /media/$USER/RPI-RP2/
+python get.py
+```
 
 ## Requirements
 
@@ -149,11 +252,23 @@ pip install -r requirements-camera.txt   # opencv-python-headless; not needed fo
 python get_camera.py                     # opens camera 0
 python get_camera.py -c 1                # a different camera index
 python get_camera.py --list              # list openable camera indices and exit
+python get_camera.py -a                  # open every detected camera at once, one window each
 ```
+
+With more than one camera connected, `-a`/`--all` opens all of them at
+once, each in its own window/process -- one `multiprocessing.Process`
+per detected camera, mirroring `get.py`'s own one-process-per-board
+pattern -- instead of running `get_camera.py -c 0`, `-c 1`, ... by hand
+in separate terminals.
 
 Recording (the "Run"/"Stop" buttons) writes an `.mp4` plus a `.csv` of
 per-frame timestamps to `data_camera/` (`-o` to change the directory).
-Unlike the Pico boards, a webcam has no device-side clock `get.py` can
+The "Mark" button (or a `mark` command from `sync_trigger.py`, see
+below) records a checkpoint at the current recording position -- the
+camera-side equivalent of `get.py`'s mArk button -- into a companion
+`..._marks.csv`, so a moment during a recording can be correlated with a
+sensor board's own marks. Unlike the Pico boards, a webcam has no
+device-side clock `get.py` can
 read: each frame's timestamp is stamped by the host at the moment OpenCV
 hands it back, carrying the same PC-side scheduling/USB jitter that
 sensor-bridge's device-side timestamping exists specifically to avoid for
@@ -171,30 +286,40 @@ with their own Qt event loop, so a Qt keyboard shortcut only ever fires
 in whichever one currently has focus -- there is no such thing as a
 shortcut shared across independent processes. `-sync` opts a window into
 a small local signal instead: pass it to any combination of `get.py`
-and/or `get_camera.py` windows, then run `sync_trigger.py` to start or
-stop all of them together.
+and/or `get_camera.py` windows, then run `sync_trigger.py` to run, test,
+calibrate, stop, mark, or quit all of them together. Command names match
+each board's own button labels (Run/Test/caliBrate/Stop/mArk); a
+`get_camera.py` window only understands run/stop/mark/quit and simply
+ignores test/calibrate, like any other unrecognized command.
 
 ```bash
 python get.py -sync              # each board window listens for the signal
-python get_camera.py -sync       # ditto
+python get_camera.py -sync -a    # ditto, for every detected camera at once
 python launch_synced.py          # or launch both of the above at once
+python launch_synced.py -c 1     # ...with only one specific camera index instead of -a
 
-python sync_trigger.py start     # sends "Run" to every -sync window at once
+python sync_trigger.py run       # sends "Run" to every -sync window at once
+python sync_trigger.py test      # sends "Test" to every -sync window at once
+python sync_trigger.py calibrate # sends "caliBrate" to every -sync window at once
 python sync_trigger.py stop      # sends "Stop" to every -sync window at once
+python sync_trigger.py mark      # sends "mArk"/a checkpoint to every -sync window at once
 python sync_trigger.py quit      # cleanly closes every -sync window at once
 python sync_trigger.py --list    # show which -sync windows are currently listening
+python sync_trigger.py           # no command -> opens a small button GUI instead
 ```
 
 For a genuine single keypress, bind an OS-level global keyboard shortcut
 (in your OS's own settings -- Windows/macOS/GNOME/etc. all have one) to
-run `python sync_trigger.py start`; Python itself has no reliable,
-cross-platform way to grab a system-wide hotkey. See `mylib/sync.py` for
-the mechanism (each `-sync` window registers its own local UDP port under
-a small directory in the system temp dir; `sync_trigger.py` reads that
-directory and sends one command to every port it finds) and
-`tests/test_sync.py` for its tests. Off by default, so a plain
-`python get.py` / `python get_camera.py` behaves exactly as before; not
-part of the code described in the associated SoftwareX manuscript.
+run `python sync_trigger.py run`; Python itself has no reliable,
+cross-platform way to grab a system-wide hotkey. The no-argument button
+GUI is for when you're at the keyboard anyway and don't want to type a
+command each time. See `mylib/sync.py` for the mechanism (each `-sync`
+window registers its own local UDP port under a small directory in the
+system temp dir; `sync_trigger.py` reads that directory and sends one
+command to every port it finds) and `tests/test_sync.py` for its tests.
+Off by default, so a plain `python get.py` / `python get_camera.py`
+behaves exactly as before; not part of the code described in the
+associated SoftwareX manuscript.
 
 ## Testing
 
@@ -288,7 +413,7 @@ a board to this repository.
 
 ## License
 
-MIT License -- see [`LICENSE`](LICENSE).
+MIT License -- see [`LICENSE.txt`](LICENSE.txt).
 
 ## Citation
 

@@ -10,18 +10,23 @@ import copy
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
 from PyPDF2 import PdfMerger
-from PyQt5.QtCore import Qt, QSizeF, QTimer
-from PyQt5.QtGui import QIcon, QPainter, QPdfWriter, QPixmap
+from PyQt5.QtCore import Qt, QRect, QSizeF, QTimer
+from PyQt5.QtGui import QIcon, QPainter, QPdfWriter
+from PyQt5.QtSvg import QSvgGenerator
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog,
                              QGroupBox, QGridLayout, QLabel, QMainWindow,
-                             QMenu, QPushButton, QVBoxLayout, QWidget)
+                             QMenu, QMessageBox, QPushButton, QVBoxLayout,
+                             QWidget)
 
 import mylib.i18n as i18n
 import mylib.plot_utils as pltutils
@@ -176,9 +181,14 @@ class MainWindow(QMainWindow):
         self.file_selection_button.setToolTip(t('plot.gui.open_file_tip'))
         self.file_selection_button.clicked.connect(self.open_file_select_dialog)
 
-        # Write button
-        self.file_write_button = QPushButton(t('plot.gui.save_graph'))
-        self.file_write_button.setToolTip(t('plot.gui.save_graph_tip'))
+        # Save Graph button (image: PDF/PNG of the currently displayed graph)
+        self.image_save_button = QPushButton(t('plot.gui.save_graph'))
+        self.image_save_button.setToolTip(t('plot.gui.save_graph_tip'))
+        self.image_save_button.clicked.connect(self.open_image_save_dialog)
+
+        # Save Data button (Excel/CSV export)
+        self.file_write_button = QPushButton(t('plot.gui.save_data'))
+        self.file_write_button.setToolTip(t('plot.gui.save_data_tip'))
         self.file_write_button.clicked.connect(self.open_file_write_dialog)
 
         # Signal Smoothing button
@@ -283,21 +293,22 @@ class MainWindow(QMainWindow):
             (self.file_selection_button, 1, 0),
             (self.mv_layout, 2, 0, 1, 5),
             (self.label2, 2, 6, 1, 5),
-            (self.file_write_button, 1, 1),
-            (self.smoothing_button, 1, 2),
-            (self.full_range_button, 1, 3),
-            (self.graph_sel_button, 1, 4),
-            (self.peaks_check, 1, 5),
-            (self.mark_check, 1, 6),
-            (self.LT_check, 1, 7),
-            (self.PRE_check, 1, 8),
-            (self.port_selection, 0, 9, 2, 1),
-            (self.time_shift, 0, 10, 2, 1),
-            (self.shift_layout, 0, 11, 2, 1),
-            (self.derivatives, 0, 12, 2, 1),
-            (self.label3, 0, 13, 1, 2),
-            (self.info_button, 1, 13),
-            (self.quit_button, 1, 14)
+            (self.image_save_button, 1, 1),
+            (self.file_write_button, 1, 2),
+            (self.smoothing_button, 1, 3),
+            (self.full_range_button, 1, 4),
+            (self.graph_sel_button, 1, 5),
+            (self.peaks_check, 1, 6),
+            (self.mark_check, 1, 7),
+            (self.LT_check, 1, 8),
+            (self.PRE_check, 1, 9),
+            (self.port_selection, 0, 10, 2, 1),
+            (self.time_shift, 0, 11, 2, 1),
+            (self.shift_layout, 0, 12, 2, 1),
+            (self.derivatives, 0, 13, 2, 1),
+            (self.label3, 0, 14, 1, 2),
+            (self.info_button, 1, 14),
+            (self.quit_button, 1, 15)
         ]
         for wid in widgets:
             self.control_layout.addWidget(*wid)
@@ -485,6 +496,72 @@ class MainWindow(QMainWindow):
                 self.smoothing_window.close()  # close the window
                 self.smoothing_window = None   # drop the reference
                 self.open_smoothing_window()   # open the window
+
+    def open_image_save_dialog(self):
+        # Save an image of self.win (the pyqtgraph graph area only, not the
+        # button panel) exactly as it's currently rendered -- when there is
+        # more than one port, that already respects the "Select port"
+        # checkboxes, since hide_show_plot() shows/hides whole subplot rows
+        # in this same widget (see self.plots.show_or_hide()).
+        default_name = f'{self.fname}_G{self.graph_id:02}.pdf'
+        dialog = QFileDialog(
+            self, t('plot.gui.save_image_dialog_title'), default_name,
+            "PDF Files (*.pdf);;SVG Files (*.svg);;PNG Files (*.png);;"
+            "TIFF Files (*.tif *.tiff);;EPS Files (*.eps)")
+        dialog.setAcceptMode(QFileDialog.AcceptSave)
+        # Adding the include-Region-Select checkbox requires disabling the native dialog.
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        region_checkbox = QCheckBox(t('plot.gui.save_region_select_checkbox'))
+        region_checkbox.setToolTip(t('plot.gui.save_region_select_checkbox_tip'))
+        region_checkbox.setChecked(False)  # default: do not include
+        layout = dialog.layout()
+        layout.addWidget(region_checkbox, layout.rowCount(), 0, 1, layout.columnCount())
+
+        if dialog.exec_() != QFileDialog.Accepted:
+            return  # do nothing if cancelled
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+        filename = selected[0]
+        selected_filter = dialog.selectedNameFilter()
+        default_ext = {'PDF': '.pdf', 'SVG': '.svg', 'PNG': '.png',
+                       'TIFF': '.tif', 'EPS': '.eps'}
+        valid_exts = {'PDF': ('.pdf',), 'SVG': ('.svg',), 'PNG': ('.png',),
+                     'TIFF': ('.tif', '.tiff'), 'EPS': ('.eps',)}
+        fmt = next(key for key in default_ext if key in selected_filter)
+        if not filename.lower().endswith(valid_exts[fmt]):
+            filename += default_ext[fmt]
+        include_region_select = region_checkbox.isChecked()
+
+        # Temporarily hide the bottom Region Select row (p_base + the "F"
+        # button) so it's excluded from the capture -- same hide/stretch-
+        # factor mechanism InitPlots.show_or_hide() uses for port rows.
+        region_row = self.num_plots + 1
+        if not include_region_select:
+            self.plots.p_base.hide()
+            self.plots.full_range_button.hide()
+            self.win.ci.layout.setRowStretchFactor(region_row, 0)
+        try:
+            self._save_graph_image(fmt, filename)
+        except RuntimeError as e:
+            QMessageBox.critical(self, t('plot.gui.save_image_dialog_title'), str(e))
+        finally:
+            if not include_region_select:
+                self.plots.p_base.show()
+                self.plots.full_range_button.show()
+                self.win.ci.layout.setRowStretchFactor(region_row, 1)
+
+    def _save_graph_image(self, fmt, filename):
+        if fmt == 'PNG':
+            self.win.grab().save(filename, 'PNG')
+        elif fmt == 'TIFF':
+            self.win.grab().save(filename, 'TIFF')
+        elif fmt == 'SVG':
+            _save_window_as_svg(self.win, filename)
+        elif fmt == 'PDF':
+            _save_window_as_pdf(self.win, filename)
+        elif fmt == 'EPS':
+            _save_window_as_eps(self.win, filename)
 
     def open_file_write_dialog(self):
         # This used to skip the dialog and write directly to
@@ -812,8 +889,10 @@ def append_window_to_pdf(window, existing_pdf_path, dpi=300):
 
 
 def _save_window_as_pdf(window, filename, dpi=300):
-    pixmap = QPixmap(window.size())
-    window.render(pixmap)
+    # grab() (not render(pixmap)) -- pyqtgraph's GraphicsView overrides
+    # render() with an incompatible signature, so this must also work when
+    # `window` is self.win (the graph area) rather than the whole MainWindow.
+    pixmap = window.grab()
 
     pdf_writer = QPdfWriter(filename)
     size = window.size()
@@ -831,15 +910,65 @@ def _save_window_as_pdf(window, filename, dpi=300):
     painter.end()
 
 
-def get_newest_file_name(folder_path):
-    # filter to only .dat files
-    dat_files = [f for f in os.listdir(folder_path) if f.endswith('.dat')]
+def _save_window_as_svg(window, filename):
+    # Wraps the same window.grab() raster capture used for PNG/PDF in an
+    # SVG container, rather than a true vector scene render. pyqtgraph's
+    # QGraphicsView.render(painter) path was tried and rejected during
+    # development: it draws scene content beyond the visible viewport and
+    # a normally-hidden crosshair item that never appears on screen, so
+    # it isn't WYSIWYG. This keeps every exported format pixel-identical
+    # to what's actually displayed.
+    pixmap = window.grab()
+    generator = QSvgGenerator()
+    generator.setFileName(filename)
+    size = window.size()
+    generator.setSize(size)
+    generator.setViewBox(QRect(0, 0, size.width(), size.height()))
+    painter = QPainter(generator)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.end()
+
+
+def _save_window_as_eps(window, filename):
+    # Qt5 has no built-in PostScript writer, so EPS is produced by
+    # rendering to a temporary PDF (the same path used for the PDF
+    # option) and converting it with poppler's `pdftops -eps`.
+    pdftops = shutil.which('pdftops')
+    if pdftops is None:
+        raise RuntimeError(t('plot.save_image_eps_needs_pdftops'))
+    fd, tmp_pdf = tempfile.mkstemp(suffix='.pdf')
+    os.close(fd)
+    try:
+        _save_window_as_pdf(window, tmp_pdf)
+        subprocess.run([pdftops, '-eps', tmp_pdf, filename], check=True)
+    finally:
+        os.remove(tmp_pdf)
+
+
+def find_data_directories(base='.'):
+    # Each board's .ini sets its own dir_name (data, data_LIS3DH,
+    # data_SHT35, ...), so recordings from different board types land in
+    # sibling directories, not all under a single 'data/'. Glob for all of
+    # them so "the newest recording" isn't scoped to just one board type.
+    return sorted(
+        os.path.join(base, name) for name in os.listdir(base)
+        if (name == 'data' or name.startswith('data_'))
+        and os.path.isdir(os.path.join(base, name)))
+
+
+def get_newest_file_name(folder_paths):
+    if isinstance(folder_paths, str):
+        folder_paths = [folder_paths]
+    # filter to only .dat files, across every given folder
+    dat_files = [
+        os.path.join(folder_path, f)
+        for folder_path in folder_paths
+        for f in os.listdir(folder_path) if f.endswith('.dat')]
     # return None if no .dat files exist
     if not dat_files:
         return None
     # select the newest .dat file
-    newest_file = max(dat_files, key=lambda f: os.path.getmtime(os.path.join(folder_path, f)))
-    return os.path.join(folder_path, newest_file)
+    return max(dat_files, key=os.path.getmtime)
 
 
 def get_files_from_directory(folder):
@@ -859,7 +988,7 @@ default_filter_file = 'default_filter.json'
 with open(default_filter_file, "r", encoding="utf-8") as f:
     default_filter = json.load(f)
 
-default_filename = get_newest_file_name(default_dir)
+default_filename = get_newest_file_name(find_data_directories())
 default_wpconfig = 'default_wavelet_params.json'
 
 # The PDF output destination MainWindow.update_plot() refers to when
@@ -1079,7 +1208,7 @@ def main():
     app.setApplicationName("sensor-bridge")
 
     # Excel output (headless): calls MainWindow.open_file_write_dialog(),
-    # the same as the GUI's "Save Graph" button (Ctrl+S). The window is not shown.
+    # the same as the GUI's "Save Data" button (Ctrl+S). The window is not shown.
     if args.excel:
         window = MainWindow(args.filename, args)
         window.open_file_write_dialog()
@@ -1097,10 +1226,21 @@ def main():
             QTimer.singleShot(1000, window.close)
     else:
         if args.filename == default_filename:
-            if not files:
+            # -d wasn't pointed at a specific directory -> search every
+            # data*/ directory (data, data_LIS3DH, data_SHT35, ...) for
+            # the newest recording, not just one board type's; -d given
+            # explicitly still scopes the search to that directory alone.
+            search_dirs = find_data_directories() if args.dirname == default_dir else [args.dirname]
+            candidates = [f for d in search_dirs for f in get_files_from_directory(d)]
+            if not candidates:
                 print(t('plot.no_dat_in_data_folder'))
                 sys.exit(1)
-            args.filename = files[-1]
+            # files[-1] would be the alphabetically-last name, not the
+            # actually most-recently-modified file (filenames don't always
+            # sort chronologically, e.g. multi-board runs insert a port
+            # suffix into the name) -- pick by mtime instead, consistent
+            # with get_newest_file_name() above.
+            args.filename = max(candidates, key=os.path.getmtime)
         window = MainWindow(args.filename, args)
         window.show()
         if args.background:

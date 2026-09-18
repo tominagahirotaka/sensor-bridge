@@ -263,13 +263,27 @@ class ApplicationWindow(QMainWindow):
         self.status_label.setStyleSheet("QLabel { color : red; }")
 
     def on_sync_command(self, command):
-        """Handles a start/stop/quit trigger from sync_trigger.py (see
-        mylib/sync.py); only bound when this window was launched with
-        -sync."""
-        if command == 'start':
+        """Handles a run/test/calibrate/stop/mark/quit trigger from
+        sync_trigger.py (see mylib/sync.py); only bound when this window
+        was launched with -sync. Named to match this board's own button
+        labels ('Run'/'Test'/'caliBrate'/'Stop'/'mArk', see e.g.
+        DPG_X95840W.ini's panel1), not the underlying on_*_button() method
+        names. 'calibrate' is broadcast the same as every other command --
+        a board whose firmware doesn't implement it (no caliBrate button
+        in its own .ini) just never replies to marker b'c', which
+        connect_serial() already turns into a clean, non-crashing
+        RuntimeError/status message after its normal retry/timeout, not a
+        hang or corrupted state."""
+        if command == 'run':
             self.on_start_button()
+        elif command == 'test':
+            self.on_test_button()
+        elif command == 'calibrate':
+            self.on_calib_button()
         elif command == 'stop':
             self.on_stop_button()
+        elif command == 'mark':
+            self.on_checkpoint_button()
         elif command == 'quit':
             self.on_quit_button()
 

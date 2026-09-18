@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 390" role="img" aria-label="Pico to LIS3DH SPI wiring diagram">
+<rect x="0" y="0" width="680" height="390" fill="#ffffff"/>
+<rect x="40" y="40" width="170" height="300" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="125.0" y="64" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">Raspberry Pi Pico</text>
+<rect x="470" y="55" width="170" height="275" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="555.0" y="79" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">LIS3DH (SPI accelerometer)</text>
+<line x1="236" y1="90" x2="444" y2="90" stroke="#dc2626" stroke-width="3"/>
+<line x1="210" y1="90" x2="236" y2="90" stroke="#dc2626" stroke-width="3"/>
+<circle cx="236" cy="90" r="3.5" fill="#dc2626"/>
+<rect x="243.0" y="77.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="246" y="94" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">3V3</text>
+<line x1="470" y1="90" x2="444" y2="90" stroke="#dc2626" stroke-width="3"/>
+<circle cx="444" cy="90" r="3.5" fill="#dc2626"/>
+<rect x="407.8" y="77.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="434" y="94" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">VCC</text>
+<line x1="236" y1="128" x2="444" y2="128" stroke="#374151" stroke-width="3"/>
+<line x1="210" y1="128" x2="236" y2="128" stroke="#374151" stroke-width="3"/>
+<circle cx="236" cy="128" r="3.5" fill="#374151"/>
+<rect x="243.0" y="115.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="246" y="132" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GND</text>
+<line x1="470" y1="128" x2="444" y2="128" stroke="#374151" stroke-width="3"/>
+<circle cx="444" cy="128" r="3.5" fill="#374151"/>
+<rect x="407.8" y="115.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="434" y="132" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GND</text>
+<line x1="236" y1="166" x2="444" y2="166" stroke="#2563eb" stroke-width="3"/>
+<line x1="210" y1="166" x2="236" y2="166" stroke="#2563eb" stroke-width="3"/>
+<circle cx="236" cy="166" r="3.5" fill="#2563eb"/>
+<rect x="243.0" y="153.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="246" y="170" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP17</text>
+<line x1="470" y1="166" x2="444" y2="166" stroke="#2563eb" stroke-width="3"/>
+<circle cx="444" cy="166" r="3.5" fill="#2563eb"/>
+<rect x="415.5" y="153.5" width="21.5" height="18.5" fill="#ffffff"/>
+<text x="434" y="170" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">CS</text>
+<line x1="236" y1="204" x2="444" y2="204" stroke="#d97706" stroke-width="3"/>
+<line x1="210" y1="204" x2="236" y2="204" stroke="#d97706" stroke-width="3"/>
+<circle cx="236" cy="204" r="3.5" fill="#d97706"/>
+<rect x="243.0" y="191.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="246" y="208" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP18</text>
+<line x1="470" y1="204" x2="444" y2="204" stroke="#d97706" stroke-width="3"/>
+<circle cx="444" cy="204" r="3.5" fill="#d97706"/>
+<rect x="407.8" y="191.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="434" y="208" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">SCK</text>
+<line x1="236" y1="242" x2="444" y2="242" stroke="#059669" stroke-width="3"/>
+<line x1="210" y1="242" x2="236" y2="242" stroke="#059669" stroke-width="3"/>
+<circle cx="236" cy="242" r="3.5" fill="#059669"/>
+<rect x="243.0" y="229.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="246" y="246" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP19</text>
+<line x1="470" y1="242" x2="444" y2="242" stroke="#059669" stroke-width="3"/>
+<circle cx="444" cy="242" r="3.5" fill="#059669"/>
+<rect x="353.5" y="229.5" width="83.5" height="18.5" fill="#ffffff"/>
+<text x="434" y="246" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">MOSI (SDI)</text>
+<line x1="236" y1="280" x2="444" y2="280" stroke="#7c3aed" stroke-width="3"/>
+<line x1="210" y1="280" x2="236" y2="280" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="236" cy="280" r="3.5" fill="#7c3aed"/>
+<rect x="243.0" y="267.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="246" y="284" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP16</text>
+<line x1="470" y1="280" x2="444" y2="280" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="444" cy="280" r="3.5" fill="#7c3aed"/>
+<rect x="353.5" y="267.5" width="83.5" height="18.5" fill="#ffffff"/>
+<text x="434" y="284" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">MISO (SDO)</text>
+<line x1="40" y1="344" x2="62" y2="344" stroke="#dc2626" stroke-width="4"/>
+<text x="70" y="348" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#374151">power (3.3V)</text>
+<line x1="40" y1="364" x2="62" y2="364" stroke="#374151" stroke-width="4"/>
+<text x="70" y="368" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#374151">ground</text>
+<text x="340.0" y="380" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6b7280">SPI0 default pins (SCK/MOSI/MISO fixed at GP18/19/16); CS is configurable via spi_cs_pin in LIS3DH.ini</text>
+</svg>

@@ -101,3 +101,44 @@ class TestCameraCapture:
         monkeypatch.setattr(cv2, "VideoCapture", _FakeVideoCapture)
         cap = camera.CameraCapture(0)
         assert cap.stop_recording() is None
+
+    def test_mark_before_recording_is_a_noop(self, monkeypatch):
+        monkeypatch.setattr(cv2, "VideoCapture", _FakeVideoCapture)
+        cap = camera.CameraCapture(0)
+        assert cap.mark() is False
+        assert cap.marks == []
+
+    def test_marks_are_written_alongside_the_frame_timestamps(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(cv2, "VideoCapture", _FakeVideoCapture)
+        monkeypatch.setattr(cv2, "VideoWriter", _FakeVideoWriter)
+        cap = camera.CameraCapture(0)
+        cap.start_recording(str(tmp_path), "testhost")
+        cap.write_frame(cap.read_frame())
+        cap.write_frame(cap.read_frame())
+        assert cap.mark() is True
+        cap.write_frame(cap.read_frame())
+        assert cap.mark() is True
+        assert len(cap.marks) == 2
+
+        csv_path = cap.stop_recording()
+        marks_path = csv_path.replace('.csv', '_marks.csv')
+
+        with open(marks_path, newline='') as f:
+            rows = list(csv.reader(f))
+        assert rows[0] == ['mark_index', 'frame_index', 'elapsed_sec_host', 'wall_clock_iso']
+        # first mark taken after 2 frames written, second after 3
+        assert [r[0] for r in rows[1:]] == ['0', '1']
+        assert [r[1] for r in rows[1:]] == ['2', '3']
+
+    def test_marks_file_is_written_even_with_no_marks(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(cv2, "VideoCapture", _FakeVideoCapture)
+        monkeypatch.setattr(cv2, "VideoWriter", _FakeVideoWriter)
+        cap = camera.CameraCapture(0)
+        cap.start_recording(str(tmp_path), "testhost")
+        cap.write_frame(cap.read_frame())
+        csv_path = cap.stop_recording()
+        marks_path = csv_path.replace('.csv', '_marks.csv')
+
+        with open(marks_path, newline='') as f:
+            rows = list(csv.reader(f))
+        assert rows == [['mark_index', 'frame_index', 'elapsed_sec_host', 'wall_clock_iso']]

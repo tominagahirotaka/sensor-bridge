@@ -58,6 +58,7 @@ class CameraCapture:
                 f'actually open, and use one of those.')
         self.writer = None
         self.timestamps = []
+        self.marks = []
         self.start_time = None
         self.dir_name = None
         self.base_name = None
@@ -81,6 +82,7 @@ class CameraCapture:
         video_path = os.path.join(dir_name, self.base_name + '.mp4')
         self.writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*fourcc), fps, (w, h))
         self.timestamps = []
+        self.marks = []
         self.start_time = time.monotonic()
 
     def write_frame(self, frame):
@@ -90,6 +92,19 @@ class CameraCapture:
         self.timestamps.append((len(self.timestamps),
                                  time.monotonic() - self.start_time,
                                  datetime.datetime.now().isoformat()))
+
+    def mark(self):
+        """Record a checkpoint at the current recording position -- the
+        camera-side equivalent of get.py's mArk button/check_points(), so
+        a moment during a recording can later be correlated with a sensor
+        board's own marks. No-op (returns False) when not recording."""
+        if self.writer is None:
+            return False
+        self.marks.append((len(self.marks),
+                            len(self.timestamps),
+                            time.monotonic() - self.start_time,
+                            datetime.datetime.now().isoformat()))
+        return True
 
     def is_recording(self):
         return self.writer is not None
@@ -104,6 +119,11 @@ class CameraCapture:
             w = csv.writer(f)
             w.writerow(['frame_index', 'elapsed_sec_host', 'wall_clock_iso'])
             w.writerows(self.timestamps)
+        marks_path = os.path.join(self.dir_name, self.base_name + '_marks.csv')
+        with open(marks_path, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['mark_index', 'frame_index', 'elapsed_sec_host', 'wall_clock_iso'])
+            w.writerows(self.marks)
         return csv_path
 
     def close(self):
