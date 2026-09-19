@@ -120,7 +120,8 @@ class ReceiveCommon:
         self.board = Board(self.p, args, True)        # Instance of Board class
         self.board.loop_th = True         # Thread loop
         with _handshake_lock():
-            board_program = self.board.open_serial()      # open serial & get board_program name
+            board_program, chip_id = self.board.open_serial()  # open serial & get board_program name + unique ID
+            self.p.board['chip_id'] = chip_id  # None for older firmware that doesn't report one
             ini_path = i18n.resolve_localized_path(
                 board_program + '.ini')  # `_jp.ini` sibling when --lang ja
             if os.path.isfile(ini_path):                  # Get measurement environment info
@@ -468,7 +469,12 @@ class Board:
                 time.sleep(0.2)
             flag = self._waiting('board_program', timeout=3)
             try:
-                board_program = flag.decode().split(':')[1]
+                parts = flag.decode().split(':')
+                board_program = parts[1]
+                # Newer firmware appends the board's factory-burned unique
+                # ID as a third field (":name:chip_id:@@" -> 4 parts after
+                # split); older firmware's ":name:@@" (3 parts) has none.
+                chip_id = parts[2] if len(parts) > 3 else None
                 break
             except (UnicodeDecodeError, IndexError):
                 print(t('comm.board_program_retry', attempt=attempt + 1, raw=flag))
@@ -477,8 +483,8 @@ class Board:
             raise RuntimeError(t('comm.board_program_failed', port=self.p.board['device'][0]))
         self.ser.reset_output_buffer()
         self.ser.reset_input_buffer()
-        print(f'[INFO] {board_program=}')
-        return board_program
+        print(f'[INFO] {board_program=} {chip_id=}')
+        return board_program, chip_id
 
     def init_serial(self, marker):
         # Write parameters PC ===> board

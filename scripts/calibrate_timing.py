@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""Unattended per-unit absolute-time calibration: launches get.py, records
+for a long duration with no supervision needed, marks a checkpoint near
+the end, stops, computes that board's clock ppm_offset from the
+recording's own header, and writes it into calibration.json.
+
+Why this works without any extra hardware: get.py already records the
+PC's wall-clock time both when a recording starts (Header.time
+['start_time']) and at every mArk/checkpoint press (Header.time
+['check_points'], alongside the board's own device-reported elapsed
+time at that same instant) -- see mylib/communicate.py's
+check_points(). This script just drives that existing mechanism by
+remote control (mylib/sync.py's run/mark/stop/quit, the same channel
+sync_trigger.py uses) instead of a human sitting at the keyboard, and
+uses the pair furthest from start_time (the mark near the end) to
+compute the board's clock offset. See calibration.json's "_readme" for
+the ppm_offset sign convention this writes.
+
+CORRECTED FOR A SUBTLE BIAS: check_points()'s device-side value is the
+timestamp of the most recently *arrived sensor sample* at mark time, not
+"the device's time right now" -- it only updates once per sample, so it
+can lag the true mark instant by up to one full sampling interval
+(1/ODR), while the paired wall-clock value is accurate. Left uncorrected
+this is a one-sided bias (always makes the device side look slower than
+it is), not just noise. This script measures the recording's own mean
+sampling interval (the same way scripts/measure_timing_precision.py
+does) and adds half of it to the device-side elapsed time -- the
+expected value of that staleness under a uniform arrival-time
+assumption -- leaving only a much smaller residual random uncertainty.
+
+The real-world wait itself cannot be shortened -- detecting a ppm-level
+clock offset requires the accumulated drift (duration x ppm_offset) to
+exceed measurement noise, so a longer recording gives a more trustworthy
+number -- but you don't have to watch it: start this and walk away.
+Driving the mark by script (rather than a human clicking a button) also
+removes human reaction-time noise (~0.1-0.5s) from the measurement,
+replacing it with this script's own scheduling latency (milliseconds),
+which is one more reason this can be trusted at shorter durations than
+a manually-marked session would need.
+
+CAUTION: mylib/sync.py's run/mark/stop/quit commands broadcast to every
+currently sync-enabled window, not just the one this script launches --
+this script refuses to run if any other sync-enabled window is already
+registered, rather than risk sending commands into someone else's
+session.
+
+Usage:
+    python3 scripts/calibrate_timing.py LIS3DH --duration 1800
+    python3 scripts/calibrate_timing.py LIS3DH --duration 1800 --dry-run
+"""
+import argparse
+import datetime
+import glob
+import json
+import os
+import subprocess
+import sys
+import time
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import numpy as np  # noqa: E402
+
+import mylib.calibration as calib  # noqa: E402
+import mylib.fileIO as FIO  # noqa: E402
+import mylib.utils as utils  # noqa: E402
+from mylib.sync import list_listeners, send_trigger  # noqa: E402
+
+STARTUP_TIMEOUT_S = 30
+POST_MARK_SETTLE_S = 2
+POST_STOP_SETTLE_S = 2
+MIN_RECOMMENDED_DURATION_S = 300
+
+
+def wait_for_listener(pid, timeout):
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < timeout:
+        for entry in list_listeners():
+            if entry['pid'] == pid:
+                return True
+        time.sleep(0.2)
+    return False
+
+
+def find_new_dat_file(dir_name, since):
+    candidates = [f for f in glob.glob(os.path.join(dir_name, '*.dat'))
+                  if os.path.getmtime(f) >= since]
+    if not candidates:
+        return None
+    return max(candidates, key=os.path.getmtime)
+
+
+def mean_sample_interval(dat_file):
+    """Mean device-reported sampling interval (seconds) for dat_file,
+    decoded the same way scripts/measure_timing_precision.py does. Used
+    to correct check_points()'s mark-timing bias -- see the module
+    docstring."""
+    import plot as plotmod
+    from mylib.plot_utils.reading import ReadData
+
+    sys.argv = ['plot.py', '-f', dat_file]
+    args = plotmod.parse_args()
+    rd = ReadData(args)
+    return float(np.diff(rd.data_t[0]).mean())
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__,
+                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('ini_name', help='board config to calibrate, e.g. LIS3DH '
+                                          '(matches <ini_name>.ini)')
+    parser.add_argument('--duration', type=float, default=1800,
+                         help='seconds to record before marking and stopping '
+                              '(default: 1800 = 30 min; longer gives a more '
+                              'trustworthy ppm_offset)')
+    parser.add_argument('--dry-run', action='store_true',
+                         help="compute and print the result but don't write calibration.json")
+    args = parser.parse_args()
+
+    if args.duration < MIN_RECOMMENDED_DURATION_S:
+        print(f"[WARN] --duration {args.duration}s is quite short; the resulting "
+              f"ppm_offset may be noisy. {MIN_RECOMMENDED_DURATION_S}s+ is recommended.")
+
+    ini_path = os.path.join(REPO_ROOT, f'{args.ini_name}.ini')
+    if not os.path.isfile(ini_path):
+        sys.exit(f"{ini_path} not found.")
+    env_set, _code = utils.read_setting_ini(ini_path)
+    dir_name = os.path.join(REPO_ROOT, env_set.get('dir_name', 'data'))
+
+    pre_existing = list_listeners()
+    if pre_existing:
+        sys.exit("Another sync-enabled window is already running "
+                 f"({len(pre_existing)} listener(s) registered). This script's "
+                 "run/mark/stop/quit commands would be broadcast to it too -- "
+                 "close it first (or quit it via sync_trigger.py) and re-run.")
+
+    launch_time = datetime.datetime.now()
+    print(f"Launching: python3 get.py -i {ini_path} -sync")
+    proc = subprocess.Popen([sys.executable, 'get.py', '-i', ini_path, '-sync'], cwd=REPO_ROOT)
+
+    try:
+        if not wait_for_listener(proc.pid, STARTUP_TIMEOUT_S):
+            sys.exit(f"get.py did not register as a sync listener within "
+                     f"{STARTUP_TIMEOUT_S}s (board not connected, or the window "
+                     "failed to open). Check the get.py output above.")
+
+        print("Board connected. Starting recording ('run') ...")
+        send_trigger('run')
+
+        print(f"Recording for {args.duration:.0f}s -- safe to leave this running "
+              f"unattended.")
+        time.sleep(args.duration)
+
+        print("Marking checkpoint ('mark') ...")
+        send_trigger('mark')
+        time.sleep(POST_MARK_SETTLE_S)
+
+        print("Stopping ('stop') ...")
+        send_trigger('stop')
+        time.sleep(POST_STOP_SETTLE_S)
+
+        print("Closing window ('quit') ...")
+        send_trigger('quit')
+        try:
+            proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            print("[WARN] get.py did not exit after 'quit'; leaving it running "
+                  "(check on it manually).")
+    except BaseException:
+        # Best-effort cleanup so an interrupted run (Ctrl+C, an exception
+        # above) doesn't leave a board silently recording forever.
+        send_trigger('stop')
+        send_trigger('quit')
+        raise
+
+    dat_file = find_new_dat_file(dir_name, launch_time.timestamp())
+    if dat_file is None:
+        sys.exit(f"No new .dat file appeared under {dir_name}/ -- recording may "
+                 "not have started (check get.py's output above).")
+    print(f"Recording: {dat_file}")
+
+    header = FIO.FileIO().read_open(dat_file)
+    sample_interval = mean_sample_interval(dat_file)
+    print(f"mean_sample_interval={sample_interval * 1000:.4f}ms "
+          f"(mark-timing bias correction: +{0.5 * sample_interval * 1000:.4f}ms)")
+    result = compute_ppm_offset(header, sample_interval)
+    print(f"chip_id={result['chip_id']}")
+    print(f"wall_elapsed={result['wall_elapsed']:.3f}s  "
+          f"device_elapsed={result['device_elapsed']:.3f}s")
+    print(f"ppm_offset={result['ppm_offset']:+.2f}")
+
+    if args.dry_run:
+        print("(--dry-run: calibration.json not modified)")
+        return
+
+    write_calibration_entry(result, dat_file)
+    print(f"Wrote calibration.json: {result['chip_id']} -> "
+          f"ppm_offset={result['ppm_offset']:+.2f}")
+
+
+DEFAULT_CALIBRATION_README = (
+    'Optional per-unit absolute-time calibration. Each key under '
+    "'boards' is one physical board's factory-burned unique ID, "
+    "exactly as reported in this project's serial handshake "
+    "(visible in the console as '[INFO] board_program=... "
+    "chip_id=...' when a board connects, or in a .dat file's "
+    "header). 'ppm_offset' is how many parts-per-million the "
+    "device's reported elapsed time exceeds true elapsed time, as "
+    "measured by comparing the device's own reported duration "
+    'against an independent time reference (e.g. an '
+    'NTP-synchronized PC clock, over a long recording -- see '
+    'README.md, or run scripts/calibrate_timing.py). Positive '
+    "means the device's clock runs fast. plot.py applies "
+    'corrected_time = raw_time / (1 + ppm_offset / 1e6) to any '
+    'recording from a board listed here; boards with no entry are '
+    'left uncorrected (this is the default -- calibration is '
+    'opt-in, per unit, and this file starts empty). This is a '
+    'per-unit measurement, not a general claim about the board '
+    "type -- see README.md's timing-precision discussion for why.")
+
+
+def compute_ppm_offset(header, sample_interval=None):
+    """header: a communicate.Header (or anything with the same .time/
+    .board shape) from a completed calibration recording. sample_interval:
+    the recording's mean device-reported sampling interval (seconds), if
+    known -- see mean_sample_interval(). Used to correct check_points()'s
+    mark-timing bias (see module docstring); pass None to skip the
+    correction (e.g. in tests with synthetic data that has no such bias).
+    Returns {'chip_id', 'wall_elapsed', 'device_elapsed', 'ppm_offset'},
+    or exits with a clear message if the recording is unusable for
+    calibration."""
+    start_time = header.time.get('start_time')
+    check_points = header.time.get('check_points', [])
+    chip_id = header.board.get('chip_id')
+
+    if start_time is None or not check_points:
+        sys.exit("Recording has no start_time/check_points -- the mark may not "
+                 "have registered. Nothing written; try again.")
+    if chip_id is None:
+        sys.exit("This board's firmware doesn't report a chip_id (older "
+                 "firmware?) -- can't key a calibration.json entry. Reflash "
+                 "with scripts/build_firmware.py's current firmware first.")
+
+    lap_time_device, wall_clock_at_mark = check_points[-1]
+    wall_elapsed = (wall_clock_at_mark - start_time).total_seconds()
+    device_elapsed = float(lap_time_device)
+    if sample_interval is not None:
+        # check_points()'s device-side value is the last-arrived sample's
+        # timestamp, not "device time right now" -- it can lag the true
+        # mark instant by up to one full sample interval. Add the
+        # expected (mean) staleness under a uniform arrival-time
+        # assumption to turn that one-sided bias into a smaller,
+        # zero-mean residual uncertainty.
+        device_elapsed += 0.5 * sample_interval
+    ppm_offset = (device_elapsed - wall_elapsed) / wall_elapsed * 1e6
+    return {'chip_id': chip_id, 'wall_elapsed': wall_elapsed,
+            'device_elapsed': device_elapsed, 'ppm_offset': ppm_offset}
+
+
+def write_calibration_entry(result, dat_file):
+    """Add/update result['chip_id']'s entry in calibration.json,
+    preserving every other board's existing entry and any metadata."""
+    if os.path.isfile(calib.CALIBRATION_PATH):
+        with open(calib.CALIBRATION_PATH, encoding='utf-8') as f:
+            calibration_data = json.load(f)
+        calibration_data.setdefault('boards', {})
+    else:
+        calibration_data = {'_readme': DEFAULT_CALIBRATION_README, 'boards': {}}
+
+    calibration_data['boards'][result['chip_id']] = {
+        'ppm_offset': result['ppm_offset'],
+        'measured_from': os.path.relpath(dat_file, REPO_ROOT),
+        'measured_at': datetime.datetime.now().isoformat(timespec='seconds'),
+        'wall_clock_elapsed_s': result['wall_elapsed'],
+    }
+    with open(calib.CALIBRATION_PATH, 'w', encoding='utf-8') as f:
+        json.dump(calibration_data, f, indent=2, ensure_ascii=False)
+        f.write('\n')
+
+
+if __name__ == '__main__':
+    main()

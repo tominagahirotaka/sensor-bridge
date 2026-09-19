@@ -341,3 +341,29 @@ class TestConnectSerialToleratesDeadPort:
 
         with pytest.raises(RuntimeError):
             board.connect_serial(b's')
+
+
+class TestOpenSerialChipId:
+    """open_serial() must parse the optional third handshake field (the
+    board's factory-burned unique ID, appended by newer firmware) without
+    breaking on older firmware's plain ':name:@@' announcement."""
+
+    def _make_board(self, waiting_return):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = SimpleNamespace(open=lambda: None,
+                                     reset_output_buffer=lambda: None,
+                                     reset_input_buffer=lambda: None)
+        board._waiting = lambda ch, timeout=None: waiting_return
+        return board
+
+    def test_new_firmware_reports_program_name_and_chip_id(self):
+        board = self._make_board(b':LIS3DH_SPI:E660C4D2C1234567:@@')
+        program, chip_id = board.open_serial()
+        assert program == 'LIS3DH_SPI'
+        assert chip_id == 'E660C4D2C1234567'
+
+    def test_old_firmware_with_no_chip_id_field_still_works(self):
+        board = self._make_board(b':LIS3DH_SPI:@@')
+        program, chip_id = board.open_serial()
+        assert program == 'LIS3DH_SPI'
+        assert chip_id is None

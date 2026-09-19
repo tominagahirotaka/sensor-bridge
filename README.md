@@ -26,11 +26,13 @@ high-rate, timing-sensitive measurements. sensor-bridge instead:
   recording can be re-opened, re-filtered, and re-exported at any time
   without re-running the experiment.
 
-Measured on real recorded hardware data (LIS3DH accelerometer, several
-output-data-rate settings), sampling-interval jitter stayed under 1%
-coefficient of variation. This measurement has not yet been written up as
-a repeatable script/notebook in this repository; doing so is a TODO
-before citing the number in the paper.
+Measured on real recorded hardware data (LIS3DH accelerometer and PPG
+front end, several output-data-rate settings), device-reported
+sampling-interval precision stayed under 1% coefficient of variation --
+a measure of how consistent successive intervals are, not absolute
+accuracy against an external clock reference. Reproducible from your own
+recordings via `scripts/measure_timing_precision.py` (see "Testing"
+below).
 
 ## Supported hardware
 
@@ -62,10 +64,10 @@ hardware board by board; the two aren't the same guarantee:
 
 | Firmware | Pico | Pico 2 | Pico W | Pico 2 W |
 |---|---|---|---|---|
-| `Analog` | verified | verified | compiled, not yet hardware-tested | verified |
-| `DPG_X95840W` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | verified |
-| `DPG_X95840W_LIS3DHx2` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
-| `LIS3DH_SPI` | verified | compiled, not yet hardware-tested | verified | compiled, not yet hardware-tested |
+| `Analog` | verified | verified | verified | verified |
+| `DPG_X95840W` | verified | compiled, not yet hardware-tested | verified | verified |
+| `DPG_X95840W_LIS3DHx2` | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
+| `LIS3DH_SPI` | verified | compiled, not yet hardware-tested | verified | verified |
 | `i2cSHT35` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
 
 "Verified" means flashed to that real board and exercised through
@@ -74,6 +76,9 @@ hardware-tested" cells build cleanly (correct FQBN, no compile errors)
 but haven't been flashed to that specific board yet -- treat them as a
 reasonable starting point, not a guarantee, until confirmed. Real-world
 hardware testing of these is planned as follow-up work.
+`DPG_X95840W_LIS3DHx2` in particular has no verified cell at all yet: the
+combined circuit itself hasn't been built, so its `.uf2`s are compiled
+from source but have never been flashed to any board.
 
 Whether a front end actually works on a *wireless* board, though, also
 depends on the circuit, not just the chip -- this is a separate question
@@ -338,16 +343,41 @@ Code paths that require a physically connected Pico (the serial
 handshake against real firmware, sensor register-level correctness) are
 not covered by this suite and still need manual hardware testing.
 
-`scripts/measure_timing_jitter.py` measures device-side sampling-interval
-jitter (coefficient of variation) from your own recorded `.dat` files,
-using the same decoding path as `plot.py`:
+`scripts/measure_timing_precision.py` measures device-reported
+sampling-interval precision (coefficient of variation) from your own
+recorded `.dat` files, using the same decoding path as `plot.py`:
 
 ```bash
-python3 scripts/measure_timing_jitter.py --markdown data/*.dat data_LIS3DH/*.dat
+python3 scripts/measure_timing_precision.py --markdown data/*.dat data_LIS3DH/*.dat
 ```
 
 This does not ship sample recordings (board data is intentionally not
 versioned), so it needs recordings of your own to run against.
+
+### Optional: per-unit absolute-time calibration
+
+Individual boards' onboard clocks can differ from real elapsed time by a
+small, fixed, unit-specific offset (crystal manufacturing tolerance) --
+this is a property of that one physical board, not of the Pico/Pico W
+platform in general, and is separate from the sampling-interval
+*precision* measured above (see the "Why sensor-bridge" discussion of
+precision vs. absolute accuracy). `sensor-bridge` can optionally correct
+for a known offset, per board:
+
+1. Each board reports its factory-burned unique ID during the serial
+   handshake (printed as `chip_id=...` in `get.py`'s console output, and
+   saved into every recording's header).
+2. Measure that specific board's offset once, against an independent
+   time reference (e.g. compare its reported elapsed time to an
+   NTP-synchronized PC clock over a long recording).
+3. Add an entry to `calibration.json` at the repo root, keyed by that
+   board's `chip_id` -- see the file's own `_readme` field for the exact
+   format and sign convention.
+
+`plot.py` (via `ReadData`) then applies that correction automatically
+whenever it loads a recording from a board with a `calibration.json`
+entry; boards with no entry are left uncorrected, which is the default
+for every board until you deliberately calibrate it.
 
 ## File format
 

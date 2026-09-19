@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from processed_binary import ProcessedBinaryError, decode_processed_payload
+import mylib.calibration as calib
 import mylib.communicate as comm
 import mylib.fileIO as FIO
 import mylib.utils as utils
@@ -234,6 +235,7 @@ class ReadData():
                 all_bin_data[i * self.board.one_data_size:(i + 1) * self.board.one_data_size])
         # transpose the data array's rows and columns
         self.data_t = self.data.T
+        self._apply_time_calibration()
         # create the PlotData
         self.data0 = PlotData()
         self.data0.title = 'Timeseries'
@@ -252,6 +254,19 @@ class ReadData():
         self._load_external_excel()
 
         self.makeTitle()                         # setting Title
+
+    def _apply_time_calibration(self):
+        """If this recording's board has a per-unit entry in
+        calibration.json, correct self.data_t[0] (the device-reported
+        elapsed time) in place. A no-op for uncalibrated boards -- see
+        mylib/calibration.py and calibration.json for the sign
+        convention and how a ppm_offset is measured."""
+        chip_id = self.header.board.get('chip_id')
+        ppm_offset = calib.ppm_offset_for(chip_id)
+        if ppm_offset is None:
+            return
+        self.data_t[0] = calib.apply_time_correction(self.data_t[0], ppm_offset)
+        print(f'[INFO] Applied time calibration: chip_id={chip_id} ppm_offset={ppm_offset}')
 
     def _load_processed_payload(self, payload):
         metadata = self.header.processed_data

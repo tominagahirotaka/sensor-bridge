@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
-"""Measure device-side sampling-interval jitter from one or more recorded
-.dat files.
+"""Measure device-reported sampling-interval precision from one or more
+recorded .dat files.
 
 This is the repeatable version of the ad hoc computation used to produce
-the timing-jitter table in the SoftwareX manuscript (see
+the timing-precision table in the SoftwareX manuscript (see
 Projects/Articles/sensor-bridge/docs/sensor_bridge_manuscript_draft.md,
 Section 3): for each recording, it decodes the device-side timestamp
 column exactly as `plot.py` would (same `ReadData` code path, so this
 never drifts from what the application actually parses) and reports the
 mean sampling interval, its standard deviation, and the coefficient of
 variation (CV = std/mean, as a percentage) -- the metric this project uses
-to characterize how much the Pico's own microsecond timestamps jitter
-around their nominal interval.
+to characterize the consistency of successive intervals between the
+Pico's own timestamps around their nominal interval. This is a measure
+of precision (repeatability), not absolute accuracy against an
+independent external clock reference, which this script does not
+evaluate.
 
 It does not ship any recordings itself (board `.dat`/`.cpt` files are
 intentionally not versioned; see .gitignore) -- point it at your own
 recordings.
 
 Usage:
-    python3 scripts/measure_timing_jitter.py data/*.dat data_LIS3DH/*.dat
-    python3 scripts/measure_timing_jitter.py --markdown data_LIS3DH/*.dat
+    python3 scripts/measure_timing_precision.py data/*.dat data_LIS3DH/*.dat
+    python3 scripts/measure_timing_precision.py --markdown data_LIS3DH/*.dat
 """
 import argparse
 import os
@@ -35,7 +38,8 @@ from mylib.plot_utils.reading import ReadData  # noqa: E402
 
 
 def measure(filename):
-    """Return a dict of jitter statistics for one .dat recording."""
+    """Return a dict of sampling-interval precision statistics for one
+    .dat recording."""
     sys.argv = ["plot.py", "-f", filename]
     args = plotmod.parse_args()
     rd = ReadData(args)
@@ -66,7 +70,7 @@ def main():
     rows = [measure(f) for f in args.files]
 
     if args.markdown:
-        print("| Recording | Output data rate | Sampling interval | Samples | Duration | Jitter (CV) |")
+        print("| Recording | Output data rate | Sampling interval | Samples | Duration | Precision (CV) |")
         print("|---|---|---|---|---|---|")
         for r in rows:
             odr = f"ODR={r['odr']}" if r["odr"] is not None else "fixed"

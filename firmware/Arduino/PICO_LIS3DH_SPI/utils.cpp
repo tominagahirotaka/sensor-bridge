@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "pico/unique_id.h"
 
 void software_reset() { rp2040.reboot(); } // RP2040 Arduino core reboot (works across arduino-pico versions)
 //
@@ -10,8 +11,14 @@ void exact_waiting(uint32_t t0_plus_thre) { uint32_t t1 = micros(); while (t1 < 
 static bool _serial_was_connected = false;
 
 static void _announce_board(char st[]) {
-  char strbuf[64];
-  sprintf(strbuf, ":%s:@@", st);
+  // Appending the flash's factory-burned unique ID lets the PC side tell
+  // individual boards of the same firmware apart (e.g. to look up a
+  // per-unit clock-precision calibration value); harmless to older PC-side
+  // code, which only ever read the first field after the leading ':'.
+  char id_str[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
+  pico_get_unique_board_id_string(id_str, sizeof(id_str));
+  char strbuf[96];
+  sprintf(strbuf, ":%s:%s:@@", st, id_str);
   Serial.println(strbuf);
 }
 

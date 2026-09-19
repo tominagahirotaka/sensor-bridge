@@ -18,3 +18,6 @@ data_*/
 firmware/Arduino/*/build/
 
 .pytest_cache/
+
+# local session notes, not part of the submission
+docs/NEXT_HARDWARE_CHECKLIST.md
