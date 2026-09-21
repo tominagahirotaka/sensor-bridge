@@ -39,7 +39,8 @@ from mylib.plot_utils.plotting import (CrossHairManager, InitPlots,
                                        plot_right_axis, plot_scalogram,
                                        plot_timeinterval_histogram,
                                        plot_timeseries, shift_image)
-from mylib.plot_utils.smoothing_gui import SignalSmoothingWindow, TabWindow
+from mylib.plot_utils.smoothing_gui import (SignalSmoothingWindow, TabWindow,
+                                            WaveletParamWindow)
 from mylib.plot_utils.export import save_header
 
 __all__ = [
@@ -63,6 +64,6 @@ __all__ = [
     'find_peaks_in_timeseries', 'get_optimal_bins', 'plot_peaks',
     'plot_right_axis', 'plot_scalogram', 'plot_timeinterval_histogram',
     'plot_timeseries', 'shift_image',
-    'SignalSmoothingWindow', 'TabWindow',
+    'SignalSmoothingWindow', 'TabWindow', 'WaveletParamWindow',
     'save_header',
 ]

@@ -197,6 +197,13 @@ class MainWindow(QMainWindow):
         self.smoothing_button.setToolTip(t('plot.gui.smoothing_tip'))
         self.smoothing_button.clicked.connect(self.open_smoothing_window)
 
+        # Wavelet Parameters button (edit range/omega0 without relaunching
+        # plot.py -- see open_wavelet_param_window())
+        self.wavelet_param_window = None   # variable holding the wavelet-params window
+        self.wavelet_param_button = QPushButton(t('plot.gui.wavelet_params'))
+        self.wavelet_param_button.setToolTip(t('plot.gui.wavelet_params_tip'))
+        self.wavelet_param_button.clicked.connect(self.open_wavelet_param_window)
+
         # Graph selection button
         self.graph_actions = {}
         self.graph_sel_button = QPushButton(t('plot.gui.select_graph'), self)
@@ -270,8 +277,6 @@ class MainWindow(QMainWindow):
         else:
             self.mv_layout.hide()
 
-        # Wavelet parameters setting
-
         # LT line(from external excel) plotting
         self.LT_check = QCheckBox('LT')
         self.LT_check.setToolTip(t('plot.gui.lt_tip'))
@@ -292,23 +297,24 @@ class MainWindow(QMainWindow):
             (self.title_label, 0, 0, 1, 7),
             (self.file_selection_button, 1, 0),
             (self.mv_layout, 2, 0, 1, 5),
-            (self.label2, 2, 6, 1, 5),
+            (self.label2, 2, 7, 1, 5),
             (self.image_save_button, 1, 1),
             (self.file_write_button, 1, 2),
             (self.smoothing_button, 1, 3),
-            (self.full_range_button, 1, 4),
-            (self.graph_sel_button, 1, 5),
-            (self.peaks_check, 1, 6),
-            (self.mark_check, 1, 7),
-            (self.LT_check, 1, 8),
-            (self.PRE_check, 1, 9),
-            (self.port_selection, 0, 10, 2, 1),
-            (self.time_shift, 0, 11, 2, 1),
-            (self.shift_layout, 0, 12, 2, 1),
-            (self.derivatives, 0, 13, 2, 1),
-            (self.label3, 0, 14, 1, 2),
-            (self.info_button, 1, 14),
-            (self.quit_button, 1, 15)
+            (self.wavelet_param_button, 1, 4),
+            (self.full_range_button, 1, 5),
+            (self.graph_sel_button, 1, 6),
+            (self.peaks_check, 1, 7),
+            (self.mark_check, 1, 8),
+            (self.LT_check, 1, 9),
+            (self.PRE_check, 1, 10),
+            (self.port_selection, 0, 11, 2, 1),
+            (self.time_shift, 0, 12, 2, 1),
+            (self.shift_layout, 0, 13, 2, 1),
+            (self.derivatives, 0, 14, 2, 1),
+            (self.label3, 0, 15, 1, 2),
+            (self.info_button, 1, 15),
+            (self.quit_button, 1, 16)
         ]
         for wid in widgets:
             self.control_layout.addWidget(*wid)
@@ -453,6 +459,32 @@ class MainWindow(QMainWindow):
             pltutils.do_wavelet_transform,
             self.current_data,
             self.wl_params)
+
+    def open_wavelet_param_window(self):
+        if not self.wavelet_param_window:
+            self.wavelet_param_window = pltutils.WaveletParamWindow(self.wl_params)
+            # connect the Signal (to receive the new parameters)
+            self.wavelet_param_window.execTriggered.connect(self.on_wavelet_params_finished)
+            # drop the reference when the window is closed
+            self.wavelet_param_window.setAttribute(Qt.WA_DeleteOnClose)
+            self.wavelet_param_window.destroyed.connect(
+                lambda: setattr(self, "wavelet_param_window", None))
+            self.wavelet_param_window.show()
+
+    def on_wavelet_params_finished(self, params):
+        print(f'[INFO] new {params=}')
+        self.wl_params = params
+        # compute the wavelet transform asynchronously with the new parameters
+        executor = ProcessPoolExecutor()
+        self.future = executor.submit(
+            pltutils.do_wavelet_transform,
+            self.current_data,
+            self.wl_params)
+        if self.graph_id in wavelet_lst:
+            # already looking at a wavelet-family graph -- refresh it now
+            # (update_plot() shows a busy cursor while this blocks on the
+            # recompute finishing; see its wavelet_lst branch)
+            self.update_plot()
 
     def open_info_window(self):
         """Open a separate window, and drop the reference when it's closed"""
@@ -787,7 +819,16 @@ class MainWindow(QMainWindow):
         debug_print(self.args, f'[Debug]{self.graph_id=}, {self.selected_graph=}')
         # cache the future's result
         if self.graph_id in wavelet_lst:
-            self.wv_data, self.energy, self.power, self.max_power_freq, self.max_power_bpm = self.future.result()
+            # self.future.result() blocks until the (possibly still
+            # running) wavelet transform finishes -- show a busy cursor
+            # rather than freeze the GUI with no feedback, whether this is
+            # the initial post-load computation or a fresh one kicked off
+            # by on_wavelet_params_finished().
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                self.wv_data, self.energy, self.power, self.max_power_freq, self.max_power_bpm = self.future.result()
+            finally:
+                QApplication.restoreOverrideCursor()
 
         # Rather than reusing the PlotItem/ViewBox, it is recreated every
         # time, the same as in open_file_select_dialog(). Reusing a PlotItem

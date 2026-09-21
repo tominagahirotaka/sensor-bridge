@@ -392,6 +392,12 @@ MESSAGES = {
         "en": "Smooth the signal by applying various filters (Ctrl+F)",
         "ja": "各種Filterをかけてsignalを平滑化する(Ctrl+F)",
     },
+    "plot.gui.wavelet_params": {"en": "Wavelet Params", "ja": "Waveletパラメータ"},
+    "plot.gui.wavelet_params_tip": {
+        "en": "Edit the wavelet transform's frequency range/omega0 and "
+              "recompute the scalogram, without relaunching plot.py",
+        "ja": "Wavelet変換の周波数範囲/omega0を編集し、plot.pyを再起動せずにScalogramを再計算する",
+    },
     "plot.gui.select_graph": {"en": "Select Graph", "ja": "Graphを選択"},
     "plot.gui.select_graph_tip": {"en": "Choose which graph to draw (Ctrl+G)", "ja": "描画する図の選択(Ctrl+G)"},
     "plot.gui.info": {"en": "INFO", "ja": "情報"},
@@ -427,6 +433,15 @@ MESSAGES = {
     "pu.btn_save": {"en": "Save", "ja": "保存"},
     "pu.btn_undo": {"en": "Undo", "ja": "元に戻す"},
     "pu.btn_apply": {"en": "Apply", "ja": "適用"},
+
+    # --- mylib/plot_utils.py: Wavelet Parameters window ---
+    "pu.wavelet_param_window_title": {"en": "Wavelet Parameters", "ja": "Waveletパラメータ"},
+    "pu.wavelet_range_group": {"en": "Frequency range", "ja": "周波数範囲"},
+    "pu.wavelet_range_min": {"en": "min", "ja": "最小"},
+    "pu.wavelet_range_max": {"en": "max", "ja": "最大"},
+    "pu.wavelet_range_step": {"en": "step", "ja": "刻み幅"},
+    "pu.wavelet_omega0_group": {"en": "omega0", "ja": "omega0"},
+
     "pu.reset_tmin_to_zero": {"en": "Reset t_min to t=0", "ja": "t_min を t=0 にリセット"},
     "pu.history_prefix": {"en": "History: ", "ja": "履歴:"},
     "pu.save_plotdata_excel": {

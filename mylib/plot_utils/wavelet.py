@@ -71,6 +71,10 @@ class WaveletParams:
         with open(filepath, "r") as f:
             return cls.from_dict(json.load(f))
 
+    def to_json(self, filepath):
+        with open(filepath, "w") as f:
+            json.dump(self.to_dict(), f)
+
     def __repr__(self):
         return f"[INFO] WaveletParams(range={self.range}, omega0={self.omega0})"
 

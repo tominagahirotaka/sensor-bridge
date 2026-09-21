@@ -1,6 +1,8 @@
 """Dialog widgets driven by the filter/plotting layers: SignalSmoothingWindow
-(the interactive per-series filter-pipeline editor) and TabWindow (the
-tabbed header/metadata + sampling-interval-histogram viewer)."""
+(the interactive per-series filter-pipeline editor), WaveletParamWindow
+(editing the continuous-wavelet-transform parameters without relaunching
+plot.py), and TabWindow (the tabbed header/metadata +
+sampling-interval-histogram viewer)."""
 
 import copy
 import json
@@ -8,14 +10,15 @@ import json
 import pyqtgraph as pg
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import (QCheckBox, QDialog, QDoubleSpinBox, QFileDialog,
-                             QGroupBox, QHBoxLayout, QLabel, QPushButton,
-                             QSpinBox, QTabWidget, QTableWidget,
+                             QGroupBox, QHBoxLayout, QLabel, QMessageBox,
+                             QPushButton, QSpinBox, QTabWidget, QTableWidget,
                              QTableWidgetItem, QVBoxLayout, QWidget)
 
 from mylib.i18n import t as tr
 from mylib.plot_utils.common import COLORS, bg_colors, init_pg, set_bg_color
 from mylib.plot_utils.filters import SignalFilter
 from mylib.plot_utils.plotting import plot_timeinterval_histogram
+from mylib.plot_utils.wavelet import WaveletParams
 
 
 class SignalSmoothingWindow(QWidget):
@@ -553,20 +556,157 @@ class SignalSmoothingWindow(QWidget):
             self.update_plot(idx)
 
     def save_parameters(self):
-        with open("history.json", "w", encoding="utf-8") as f:
+        # Regression fix: this used to always write a hardcoded
+        # "history.json" in the current directory with no dialog at all
+        # -- asymmetric with load_parameters()'s file picker, and silently
+        # overwrote any existing file of that name with no confirmation.
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Save Parameters", "history.json", "JSON Files (*.json)")
+        if not filename:
+            return  # user cancelled
+        with open(filename, "w", encoding="utf-8") as f:
             json.dump(self.history, f, ensure_ascii=False, separators=(",", ":"))
         print(f'Save {self.history=}')
 
     def load_parameters(self):
         filename, _ = QFileDialog.getOpenFileName(
             self, "Load Parameters", "", "JSON Files (*.json)")
-        with open(filename, "r", encoding="utf-8") as f:
-            dt = json.load(f)
-            self.history = {int(k): v for k, v in dt.items()}
+        if not filename:
+            return  # user cancelled -- getOpenFileName returns '' here,
+            # which used to be passed straight to open() and crash with
+            # an uncaught FileNotFoundError
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                dt = json.load(f)
+            loaded = {int(k): v for k, v in dt.items()}
+        except (OSError, ValueError) as e:
+            QMessageBox.warning(self, "Load Parameters", f"Could not load {filename}:\n{e}")
+            return
+
+        # A history file saved from a recording with a different channel
+        # count would otherwise crash apply_history() below with an
+        # IndexError on the first out-of-range channel; drop those
+        # entries instead and tell the user, rather than lose the ones
+        # that do apply.
+        valid_idxs = set(range(len(self.data.data)))
+        skipped = sorted(set(loaded) - valid_idxs)
+        self.history = {idx: v for idx, v in loaded.items() if idx in valid_idxs}
+        if skipped:
+            QMessageBox.warning(
+                self, "Load Parameters",
+                f"This file has entries for channel(s) {skipped} which don't "
+                f"exist in the current recording ({len(valid_idxs)} channel(s)); "
+                "those were skipped.")
 
         print(f'Load {self.history=}')
         for idx in self.history.keys():
             self.apply_history(idx)
+
+
+class WaveletParamWindow(QWidget):
+    """Small editor for the continuous-wavelet-transform parameters
+    (frequency range + omega0), so they can be adjusted while a
+    recording is open instead of only via plot.py's --wlrange/--wlomega0/
+    --wpconfig startup flags. Deliberately does *not* recompute on every
+    spin-box change -- the wavelet transform is slow -- only when Apply
+    is pressed, matching SignalSmoothingWindow's Exec-button pattern."""
+    execTriggered = pyqtSignal(object)  # emits a new WaveletParams
+
+    def __init__(self, params: WaveletParams):
+        super().__init__()
+        self.setWindowTitle(tr('pu.wavelet_param_window_title'))
+
+        layout = QVBoxLayout()
+
+        button_layout = QHBoxLayout()
+        apply_button = QPushButton(tr('pu.btn_apply'))
+        load_button = QPushButton(tr('pu.btn_load'))
+        save_button = QPushButton(tr('pu.btn_save'))
+        apply_button.clicked.connect(self.on_apply)
+        load_button.clicked.connect(self.load_parameters)
+        save_button.clicked.connect(self.save_parameters)
+        button_layout.addWidget(apply_button)
+        button_layout.addWidget(load_button)
+        button_layout.addWidget(save_button)
+        layout.addLayout(button_layout)
+
+        range_group = QGroupBox(tr('pu.wavelet_range_group'))
+        range_layout = QHBoxLayout()
+        range_layout.addWidget(QLabel(tr('pu.wavelet_range_min')))
+        self.range_min = QDoubleSpinBox()
+        self.range_min.setDecimals(4)
+        self.range_min.setRange(0.0001, 1e6)
+        range_layout.addWidget(self.range_min)
+        range_layout.addWidget(QLabel(tr('pu.wavelet_range_max')))
+        self.range_max = QDoubleSpinBox()
+        self.range_max.setDecimals(4)
+        self.range_max.setRange(0.0001, 1e6)
+        range_layout.addWidget(self.range_max)
+        range_layout.addWidget(QLabel(tr('pu.wavelet_range_step')))
+        self.range_step = QDoubleSpinBox()
+        self.range_step.setDecimals(4)
+        self.range_step.setRange(0.0001, 1e6)
+        range_layout.addWidget(self.range_step)
+        range_group.setLayout(range_layout)
+        layout.addWidget(range_group)
+
+        omega0_group = QGroupBox(tr('pu.wavelet_omega0_group'))
+        omega0_layout = QHBoxLayout()
+        self.omega0 = QDoubleSpinBox()
+        self.omega0.setDecimals(4)
+        self.omega0.setRange(0.0001, 1e6)
+        omega0_layout.addWidget(self.omega0)
+        omega0_group.setLayout(omega0_layout)
+        layout.addWidget(omega0_group)
+
+        self.setLayout(layout)
+        self.set_params(params)
+
+    def set_params(self, params: WaveletParams):
+        self.range_min.setValue(params.range[0])
+        self.range_max.setValue(params.range[1])
+        self.range_step.setValue(params.range[2])
+        self.omega0.setValue(params.omega0)
+
+    def current_params(self):
+        """Raises ValueError (via WaveletParams's own validation) if the
+        current spin-box values don't form a valid range/omega0."""
+        return WaveletParams(
+            range=[self.range_min.value(), self.range_max.value(), self.range_step.value()],
+            omega0=self.omega0.value())
+
+    def on_apply(self):
+        try:
+            params = self.current_params()
+        except ValueError as e:
+            QMessageBox.warning(self, tr('pu.wavelet_param_window_title'), str(e))
+            return
+        self.execTriggered.emit(params)
+
+    def save_parameters(self):
+        try:
+            params = self.current_params()
+        except ValueError as e:
+            QMessageBox.warning(self, tr('pu.wavelet_param_window_title'), str(e))
+            return
+        filename, _ = QFileDialog.getSaveFileName(
+            self, tr('pu.btn_save'), 'wavelet_params.json', "JSON Files (*.json)")
+        if not filename:
+            return  # user cancelled
+        params.to_json(filename)
+
+    def load_parameters(self):
+        filename, _ = QFileDialog.getOpenFileName(
+            self, tr('pu.btn_load'), '', "JSON Files (*.json)")
+        if not filename:
+            return  # user cancelled
+        try:
+            params = WaveletParams.from_json(filename)
+        except (OSError, ValueError, TypeError) as e:
+            QMessageBox.warning(self, tr('pu.wavelet_param_window_title'),
+                                f"Could not load {filename}:\n{e}")
+            return
+        self.set_params(params)
 
 
 # The LIS3DH (accelerometer) register codes are not meaningful on their own,
