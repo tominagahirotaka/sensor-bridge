@@ -367,12 +367,20 @@ for a known offset, per board:
 1. Each board reports its factory-burned unique ID during the serial
    handshake (printed as `chip_id=...` in `get.py`'s console output, and
    saved into every recording's header).
-2. Measure that specific board's offset once, against an independent
-   time reference (e.g. compare its reported elapsed time to an
-   NTP-synchronized PC clock over a long recording).
-3. Add an entry to `calibration.json` at the repo root, keyed by that
-   board's `chip_id` -- see the file's own `_readme` field for the exact
-   format and sign convention.
+2. Run `python3 scripts/calibrate_timing.py <ini_name> --duration 1800`
+   a few times (3-5 runs is a reasonable target; ideally not all
+   back-to-back, so temperature/time-of-day variation is captured, not
+   just the measurement method's own repeatability) -- it drives
+   `get.py` unattended (no need to watch it) and measures that specific
+   board's clock offset against the PC's own clock. A single run is
+   noisy enough (order a few ppm, from sample-interval-scale timing
+   uncertainty) that averaging several is recommended, which is exactly
+   what repeated runs do automatically: each one appends to that board's
+   run history in `calibration.json` rather than overwriting the last
+   one, and the value `plot.py` actually uses is the mean across all
+   runs so far.
+3. See `calibration.json`'s own `_readme` field for the exact format and
+   sign convention.
 
 `plot.py` (via `ReadData`) then applies that correction automatically
 whenever it loads a recording from a board with a `calibration.json`

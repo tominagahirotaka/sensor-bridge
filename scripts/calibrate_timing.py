@@ -195,9 +195,12 @@ def main():
         print("(--dry-run: calibration.json not modified)")
         return
 
-    write_calibration_entry(result, dat_file)
+    entry = write_calibration_entry(result, dat_file)
+    all_offsets = [r['ppm_offset'] for r in entry['runs']]
     print(f"Wrote calibration.json: {result['chip_id']} -> "
-          f"ppm_offset={result['ppm_offset']:+.2f}")
+          f"ppm_offset={entry['ppm_offset']:+.2f} "
+          f"(mean of {entry['n_runs']} run(s); this run: {result['ppm_offset']:+.2f}; "
+          f"range so far: {min(all_offsets):+.2f} to {max(all_offsets):+.2f})")
 
 
 DEFAULT_CALIBRATION_README = (
@@ -218,7 +221,14 @@ DEFAULT_CALIBRATION_README = (
     'left uncorrected (this is the default -- calibration is '
     'opt-in, per unit, and this file starts empty). This is a '
     'per-unit measurement, not a general claim about the board '
-    "type -- see README.md's timing-precision discussion for why.")
+    "type -- see README.md's timing-precision discussion for why. "
+    "A single run's ppm_offset is noisy (see calibrate_timing.py's "
+    "module docstring), so scripts/calibrate_timing.py accumulates "
+    "repeated runs against the same board in 'runs' rather than "
+    "overwriting; the top-level 'ppm_offset' it writes is the mean "
+    "across 'runs' ('n_runs' of them), which is what plot.py actually "
+    "reads -- run it several times (ideally at different times/room "
+    "temperatures) rather than relying on a single run.")
 
 
 def compute_ppm_offset(header, sample_interval=None):
@@ -260,8 +270,14 @@ def compute_ppm_offset(header, sample_interval=None):
 
 
 def write_calibration_entry(result, dat_file):
-    """Add/update result['chip_id']'s entry in calibration.json,
-    preserving every other board's existing entry and any metadata."""
+    """Append this run to result['chip_id']'s run history in
+    calibration.json (creating it if this is the first run for that
+    board) and recompute its reported ppm_offset as the mean across all
+    runs so far -- repeated runs against the same physical board
+    (same chip_id) accumulate rather than overwrite each other, since a
+    single run's ppm_offset is noisy enough that averaging several is
+    recommended (see README.md). Preserves every other board's existing
+    entry. Returns the (possibly newly created) entry for this chip_id."""
     if os.path.isfile(calib.CALIBRATION_PATH):
         with open(calib.CALIBRATION_PATH, encoding='utf-8') as f:
             calibration_data = json.load(f)
@@ -269,15 +285,21 @@ def write_calibration_entry(result, dat_file):
     else:
         calibration_data = {'_readme': DEFAULT_CALIBRATION_README, 'boards': {}}
 
-    calibration_data['boards'][result['chip_id']] = {
+    boards = calibration_data['boards']
+    entry = boards.setdefault(result['chip_id'], {'runs': []})
+    entry['runs'].append({
         'ppm_offset': result['ppm_offset'],
         'measured_from': os.path.relpath(dat_file, REPO_ROOT),
         'measured_at': datetime.datetime.now().isoformat(timespec='seconds'),
         'wall_clock_elapsed_s': result['wall_elapsed'],
-    }
+    })
+    entry['n_runs'] = len(entry['runs'])
+    entry['ppm_offset'] = sum(r['ppm_offset'] for r in entry['runs']) / entry['n_runs']
+
     with open(calib.CALIBRATION_PATH, 'w', encoding='utf-8') as f:
         json.dump(calibration_data, f, indent=2, ensure_ascii=False)
         f.write('\n')
+    return entry
 
 
 if __name__ == '__main__':
