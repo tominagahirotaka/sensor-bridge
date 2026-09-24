@@ -149,6 +149,11 @@ void loop() {
         ok = 0; break;
       case 'q':  // quit  -> 'q'
         ok = 0; software_reset(); break;
+      case 'T':  // report on-chip temperature (die temp -- not the same as
+                 // the crystal's own temperature; PC side only sends this
+                 // while idle, between recordings, so it never perturbs a
+                 // recording's sampling cadence)
+        Serial.print("temp_c="); Serial.println(analogReadTemp(), 2); break;
       default:
         ;
     }

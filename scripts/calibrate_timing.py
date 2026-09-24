@@ -44,6 +44,15 @@ this script refuses to run if any other sync-enabled window is already
 registered, rather than risk sending commands into someone else's
 session.
 
+Also logs the board's on-chip temperature (RP2040/RP2350's built-in
+sensor -- die temperature, not the crystal oscillator's own temperature,
+but a useful proxy) immediately before 'run' and immediately after
+'stop', i.e. only while idle: querying it involves a ~1ms ADC
+settle/read that would otherwise land in the middle of the sampling
+loop and show up as a one-off irregular interval if sent while
+streaming. Stored per-run in calibration.json so a temperature
+correlation across repeated runs can be checked directly.
+
 Usage:
     python3 scripts/calibrate_timing.py LIS3DH --duration 1800
     python3 scripts/calibrate_timing.py LIS3DH --duration 1800 --dry-run
@@ -71,6 +80,7 @@ from mylib.sync import list_listeners, send_trigger  # noqa: E402
 STARTUP_TIMEOUT_S = 30
 POST_MARK_SETTLE_S = 2
 POST_STOP_SETTLE_S = 2
+POST_TEMP_SETTLE_S = 1
 MIN_RECOMMENDED_DURATION_S = 300
 
 
@@ -146,6 +156,13 @@ def main():
                      f"{STARTUP_TIMEOUT_S}s (board not connected, or the window "
                      "failed to open). Check the get.py output above.")
 
+        # Queried while idle, before 'run' and after 'stop' -- never
+        # during active streaming, so this can't perturb the recording's
+        # sampling cadence (see Board.query_temperature()'s docstring).
+        print("Querying on-chip temperature before starting ('temp') ...")
+        send_trigger('temp')
+        time.sleep(POST_TEMP_SETTLE_S)
+
         print("Board connected. Starting recording ('run') ...")
         send_trigger('run')
 
@@ -160,6 +177,10 @@ def main():
         print("Stopping ('stop') ...")
         send_trigger('stop')
         time.sleep(POST_STOP_SETTLE_S)
+
+        print("Querying on-chip temperature after stopping ('temp') ...")
+        send_trigger('temp')
+        time.sleep(POST_TEMP_SETTLE_S)
 
         print("Closing window ('quit') ...")
         send_trigger('quit')
@@ -191,11 +212,23 @@ def main():
           f"device_elapsed={result['device_elapsed']:.3f}s")
     print(f"ppm_offset={result['ppm_offset']:+.2f}")
 
+    # Best-effort: None for either/both if the board's firmware doesn't
+    # support 'T' (see Board.query_temperature()) -- never blocks writing
+    # the calibration result itself.
+    temp_log = header.board.get('temperature_log', [])
+    temp_start = temp_log[0]['temp_c'] if len(temp_log) > 0 else None
+    temp_end = temp_log[-1]['temp_c'] if len(temp_log) > 1 else None
+    if temp_start is not None:
+        print(f"on-chip temperature: start={temp_start:.2f}C"
+              + (f" end={temp_end:.2f}C" if temp_end is not None else " (no end reading)"))
+    else:
+        print("on-chip temperature: not available (older firmware without 'T'?)")
+
     if args.dry_run:
         print("(--dry-run: calibration.json not modified)")
         return
 
-    entry = write_calibration_entry(result, dat_file)
+    entry = write_calibration_entry(result, dat_file, temp_start, temp_end)
     all_offsets = [r['ppm_offset'] for r in entry['runs']]
     print(f"Wrote calibration.json: {result['chip_id']} -> "
           f"ppm_offset={entry['ppm_offset']:+.2f} "
@@ -228,7 +261,14 @@ DEFAULT_CALIBRATION_README = (
     "overwriting; the top-level 'ppm_offset' it writes is the mean "
     "across 'runs' ('n_runs' of them), which is what plot.py actually "
     "reads -- run it several times (ideally at different times/room "
-    "temperatures) rather than relying on a single run.")
+    "temperatures) rather than relying on a single run. Each run entry "
+    "also records 'temp_c_start'/'temp_c_end' -- the board's own "
+    "on-chip die temperature (Celsius) immediately before/after that "
+    "run, queried only while idle so it never perturbs the recording's "
+    "sampling cadence (null if unavailable, e.g. older firmware) -- so "
+    "ppm_offset can be checked for a temperature correlation across "
+    "runs directly, instead of only inferring it from varying the time "
+    "of day.")
 
 
 def compute_ppm_offset(header, sample_interval=None):
@@ -269,7 +309,7 @@ def compute_ppm_offset(header, sample_interval=None):
             'device_elapsed': device_elapsed, 'ppm_offset': ppm_offset}
 
 
-def write_calibration_entry(result, dat_file):
+def write_calibration_entry(result, dat_file, temp_start=None, temp_end=None):
     """Append this run to result['chip_id']'s run history in
     calibration.json (creating it if this is the first run for that
     board) and recompute its reported ppm_offset as the mean across all
@@ -277,7 +317,12 @@ def write_calibration_entry(result, dat_file):
     (same chip_id) accumulate rather than overwrite each other, since a
     single run's ppm_offset is noisy enough that averaging several is
     recommended (see README.md). Preserves every other board's existing
-    entry. Returns the (possibly newly created) entry for this chip_id."""
+    entry. temp_start/temp_end (on-chip die temperature, Celsius, from
+    Board.query_temperature() before/after this run -- None if
+    unavailable) are stored alongside the run so ppm_offset can later be
+    inspected for a temperature correlation across runs, rather than
+    only varying by time-of-day as a weak proxy. Returns the (possibly
+    newly created) entry for this chip_id."""
     if os.path.isfile(calib.CALIBRATION_PATH):
         with open(calib.CALIBRATION_PATH, encoding='utf-8') as f:
             calibration_data = json.load(f)
@@ -292,6 +337,8 @@ def write_calibration_entry(result, dat_file):
         'measured_from': os.path.relpath(dat_file, REPO_ROOT),
         'measured_at': datetime.datetime.now().isoformat(timespec='seconds'),
         'wall_clock_elapsed_s': result['wall_elapsed'],
+        'temp_c_start': temp_start,
+        'temp_c_end': temp_end,
     })
     entry['n_runs'] = len(entry['runs'])
     entry['ppm_offset'] = sum(r['ppm_offset'] for r in entry['runs']) / entry['n_runs']

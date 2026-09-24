@@ -367,3 +367,96 @@ class TestOpenSerialChipId:
         program, chip_id = board.open_serial()
         assert program == 'LIS3DH_SPI'
         assert chip_id is None
+
+
+class _FakeSerialLine:
+    """Minimal stand-in for pyserial's Serial, just enough for
+    Board.query_temperature()'s write/readline/reset_*_buffer calls and
+    its timeout save-and-restore."""
+
+    def __init__(self, readline_return):
+        self.readline_return = readline_return
+        self.written = []
+        self.timeout = 16
+
+    def write(self, data):
+        self.written.append(data)
+
+    def readline(self):
+        return self.readline_return
+
+    def reset_output_buffer(self):
+        pass
+
+    def reset_input_buffer(self):
+        pass
+
+
+class TestQueryTemperature:
+    """Board.query_temperature() sends 'T' and parses "temp_c=<float>";
+    must degrade to None (never raise) for anything else, since it's a
+    best-effort diagnostic that must never interrupt a recording."""
+
+    def test_parses_a_valid_reply(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialLine(b'temp_c=23.45\r\n')
+        assert board.query_temperature() == pytest.approx(23.45)
+        assert board.ser.written == [b'T']
+
+    def test_older_firmware_with_no_reply_returns_none(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialLine(b'')  # readline() timeout -> empty bytes
+        assert board.query_temperature() is None
+
+    def test_garbled_reply_returns_none_not_a_crash(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialLine(b'not the expected format\r\n')
+        assert board.query_temperature() is None
+
+    def test_unparseable_number_returns_none_not_a_crash(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialLine(b'temp_c=not_a_number\r\n')
+        assert board.query_temperature() is None
+
+    def test_timeout_is_restored_after_the_call(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialLine(b'temp_c=20.0\r\n')
+        board.ser.timeout = 16
+        board.query_temperature(timeout=1.0)
+        assert board.ser.timeout == 16
+
+
+class TestReceiveCommonQueryTemperature:
+    """ReceiveCommon.query_temperature() must log into
+    self.p.board['temperature_log'] without disturbing check_points()'s
+    own list (a different field, so plot.py's 2-column mark-points Excel
+    export can never collide with it)."""
+
+    def _make_receiver(self, temp_c):
+        rcv = comm.ReceiveCommon.__new__(comm.ReceiveCommon)
+        rcv.p = SimpleNamespace(board={})
+        rcv.board = SimpleNamespace(query_temperature=lambda: temp_c)
+        return rcv
+
+    def test_successful_query_is_appended_with_a_timestamp(self):
+        rcv = self._make_receiver(21.5)
+        result = rcv.query_temperature()
+        assert result == 21.5
+        log = rcv.p.board['temperature_log']
+        assert len(log) == 1
+        assert log[0]['temp_c'] == 21.5
+        assert 'when' in log[0]
+
+    def test_two_calls_accumulate_both_readings(self):
+        rcv = self._make_receiver(20.0)
+        rcv.query_temperature()
+        rcv.board.query_temperature = lambda: 21.0
+        rcv.query_temperature()
+        temps = [r['temp_c'] for r in rcv.p.board['temperature_log']]
+        assert temps == [20.0, 21.0]
+
+    def test_failed_query_does_not_add_a_log_entry(self):
+        rcv = self._make_receiver(None)
+        result = rcv.query_temperature()
+        assert result is None
+        assert 'temperature_log' not in rcv.p.board

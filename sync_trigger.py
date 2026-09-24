@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Send a "run", "test", "calibrate", "stop", "mark", or "quit" command to
-every currently-running get.py board window and get_camera.py window that
-was launched with -sync. Command names match each board's own button
-labels (Run/Test/caliBrate/Stop/mArk, see e.g. DPG_X95840W.ini's panel1);
-get_camera.py windows only understand run/stop/mark/quit and simply
-ignore test/calibrate, the same as any other unrecognized command.
+"""Send a "run", "test", "calibrate", "stop", "mark", "temp", or "quit"
+command to every currently-running get.py board window and get_camera.py
+window that was launched with -sync. Command names match each board's own
+button labels (Run/Test/caliBrate/Stop/mArk, see e.g. DPG_X95840W.ini's
+panel1) where a matching button exists; get_camera.py windows only
+understand run/stop/mark/quit and simply ignore test/calibrate/temp, the
+same as any other unrecognized command.
 
 Meant to be bound to a single OS-level global keyboard shortcut (in your
 OS's own settings -- Python cannot reliably grab a system-wide shortcut
@@ -17,6 +18,8 @@ README.md's "Starting several windows together" section.
     python sync_trigger.py calibrate   # only meaningful for caliBrate-capable boards
     python sync_trigger.py stop
     python sync_trigger.py mark        # record a checkpoint in every running window
+    python sync_trigger.py temp        # log on-chip temperature (no matching button;
+                                        # see scripts/calibrate_timing.py)
     python sync_trigger.py quit        # cleanly close every sync-enabled window
     python sync_trigger.py --list      # show what's currently listening
     python sync_trigger.py             # no command -> opens a small button GUI instead
@@ -27,7 +30,7 @@ import sys
 
 from mylib.sync import list_listeners, send_trigger
 
-COMMANDS = ['calibrate', 'test', 'run', 'mark', 'stop', 'quit']
+COMMANDS = ['calibrate', 'test', 'run', 'mark', 'temp', 'stop', 'quit']
 
 
 def _send(command):

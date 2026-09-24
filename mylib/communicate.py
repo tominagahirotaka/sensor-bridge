@@ -185,6 +185,20 @@ class ReceiveCommon:
         self.check_point_txt = f"CP.{len(self.p.time['check_points']):03d}  {lap_time:.2f}(sec)"
         print(f'[INFO] {self.check_point_txt=}, {now=}')
 
+    def query_temperature(self):
+        """Best-effort: query the board's on-chip temperature (see
+        Board.query_temperature()) and append it to self.p.board
+        ['temperature_log'] (a new field, separate from check_points, so
+        this can never collide with plot.py's mark-points Excel export,
+        which expects exactly 2 columns per check_points entry). Returns
+        the temperature (or None on failure/older firmware) so callers
+        can report it immediately without re-reading the header."""
+        temp_c = self.board.query_temperature()
+        if temp_c is not None:
+            self.p.board.setdefault('temperature_log', []).append(
+                {'when': datetime.datetime.now(), 'temp_c': temp_c})
+        return temp_c
+
 
 class Receive(ReceiveCommon):
     def __init__(self, args, board, num_boards=1):
@@ -390,6 +404,40 @@ class Board:
         except (serial.SerialException, OSError, *_TERMIOS_ERRORS) as exc:
             raise RuntimeError(
                 t('comm.write_failed', port=self.p.board['device'][0], err=exc))
+
+    def query_temperature(self, timeout=1.0):
+        """Send 'T' and parse the board's on-chip temperature reply
+        ("temp_c=<float>", added alongside the chip_id handshake field --
+        see firmware/Arduino/*/utils.cpp and the .ino sketches' 'T' case).
+        Returns a float (Celsius, the RP2040/RP2350 die temperature -- not
+        the same as the crystal oscillator's own temperature) or None if
+        the board doesn't reply within `timeout` (e.g. older firmware
+        without this command) or the reply doesn't parse. This is a
+        best-effort diagnostic value only (used by
+        scripts/calibrate_timing.py to log temperature alongside a clock
+        calibration measurement) -- a failure here must never interrupt a
+        recording, so it never raises.
+
+        Only meaningful when called while the board is idle (not
+        streaming samples): calibrate_timing.py only calls this before
+        'run' and after 'stop', specifically so it never perturbs a
+        recording's sampling cadence."""
+        self._reset_buffers()
+        self._write_marker(b'T')
+        orig_timeout = self.ser.timeout
+        self.ser.timeout = timeout
+        try:
+            line = self.ser.readline().decode('utf-8', 'ignore').strip()
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            return None
+        finally:
+            self.ser.timeout = orig_timeout
+        if not line.startswith('temp_c='):
+            return None
+        try:
+            return float(line[len('temp_c='):])
+        except ValueError:
+            return None
 
     def connect_serial(self, marker):
         # Flush *before* writing, not after: some boards (e.g. X95840W,

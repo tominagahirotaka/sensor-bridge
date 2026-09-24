@@ -292,10 +292,12 @@ in whichever one currently has focus -- there is no such thing as a
 shortcut shared across independent processes. `-sync` opts a window into
 a small local signal instead: pass it to any combination of `get.py`
 and/or `get_camera.py` windows, then run `sync_trigger.py` to run, test,
-calibrate, stop, mark, or quit all of them together. Command names match
-each board's own button labels (Run/Test/caliBrate/Stop/mArk); a
-`get_camera.py` window only understands run/stop/mark/quit and simply
-ignores test/calibrate, like any other unrecognized command.
+calibrate, stop, mark, query on-chip temperature, or quit all of them
+together. Command names match each board's own button labels
+(Run/Test/caliBrate/Stop/mArk) where a matching button exists (`temp` has
+none -- see `scripts/calibrate_timing.py`); a `get_camera.py` window only
+understands run/stop/mark/quit and simply ignores test/calibrate/temp,
+like any other unrecognized command.
 
 ```bash
 python get.py -sync              # each board window listens for the signal
@@ -308,6 +310,9 @@ python sync_trigger.py test      # sends "Test" to every -sync window at once
 python sync_trigger.py calibrate # sends "caliBrate" to every -sync window at once
 python sync_trigger.py stop      # sends "Stop" to every -sync window at once
 python sync_trigger.py mark      # sends "mArk"/a checkpoint to every -sync window at once
+python sync_trigger.py temp      # logs on-chip temperature (get.py boards only, and only
+                                  # while idle -- see "Optional: per-unit absolute-time
+                                  # calibration" below)
 python sync_trigger.py quit      # cleanly closes every -sync window at once
 python sync_trigger.py --list    # show which -sync windows are currently listening
 python sync_trigger.py           # no command -> opens a small button GUI instead
@@ -369,16 +374,20 @@ for a known offset, per board:
    saved into every recording's header).
 2. Run `python3 scripts/calibrate_timing.py <ini_name> --duration 1800`
    a few times (3-5 runs is a reasonable target; ideally not all
-   back-to-back, so temperature/time-of-day variation is captured, not
-   just the measurement method's own repeatability) -- it drives
-   `get.py` unattended (no need to watch it) and measures that specific
-   board's clock offset against the PC's own clock. A single run is
-   noisy enough (order a few ppm, from sample-interval-scale timing
+   back-to-back, so temperature variation is captured, not just the
+   measurement method's own repeatability) -- it drives `get.py`
+   unattended (no need to watch it) and measures that specific board's
+   clock offset against the PC's own clock. A single run is noisy
+   enough (order a few ppm, from sample-interval-scale timing
    uncertainty) that averaging several is recommended, which is exactly
    what repeated runs do automatically: each one appends to that board's
    run history in `calibration.json` rather than overwriting the last
    one, and the value `plot.py` actually uses is the mean across all
-   runs so far.
+   runs so far. Each run also logs the RP2040/RP2350's own on-chip
+   temperature immediately before/after (only while idle, so it can't
+   disturb the recording itself), so a temperature/ppm_offset
+   correlation can be checked directly rather than only inferred from
+   varying the time of day.
 3. See `calibration.json`'s own `_readme` field for the exact format and
    sign convention.
 

@@ -232,6 +232,14 @@ class ApplicationWindow(QMainWindow):
         else:
             self.cp_label.setText(t('window.status_push_after_running'))
 
+    def on_temperature_query(self):
+        """No button -- only reachable via the 'temp' sync command (see
+        scripts/calibrate_timing.py). Deliberately does nothing while a
+        board is connected but not initialized (self.rcv.init_flag),
+        same guard as on_checkpoint_button()."""
+        if self.rcv.init_flag:
+            self.rcv.query_temperature()
+
     def on_calib_button(self):
         self.marker = b'c'
         try:
@@ -263,7 +271,7 @@ class ApplicationWindow(QMainWindow):
         self.status_label.setStyleSheet("QLabel { color : red; }")
 
     def on_sync_command(self, command):
-        """Handles a run/test/calibrate/stop/mark/quit trigger from
+        """Handles a run/test/calibrate/stop/mark/quit/temp trigger from
         sync_trigger.py (see mylib/sync.py); only bound when this window
         was launched with -sync. Named to match this board's own button
         labels ('Run'/'Test'/'caliBrate'/'Stop'/'mArk', see e.g.
@@ -273,7 +281,9 @@ class ApplicationWindow(QMainWindow):
         in its own .ini) just never replies to marker b'c', which
         connect_serial() already turns into a clean, non-crashing
         RuntimeError/status message after its normal retry/timeout, not a
-        hang or corrupted state."""
+        hang or corrupted state. 'temp' (no matching button; used by
+        scripts/calibrate_timing.py) has no such retry -- see
+        Board.query_temperature()'s own timeout/None-on-failure handling."""
         if command == 'run':
             self.on_start_button()
         elif command == 'test':
@@ -286,6 +296,8 @@ class ApplicationWindow(QMainWindow):
             self.on_checkpoint_button()
         elif command == 'quit':
             self.on_quit_button()
+        elif command == 'temp':
+            self.on_temperature_query()
 
     def on_quit_button(self):
         self.quit(t('window.quit_pressed'))
