@@ -46,6 +46,7 @@ UI) plus a matching sketch under `firmware/Arduino/`.
 | `Analog` | Generic analog input (e.g. a custom photoplethysmography front-end read via the Pico's ADC) |
 | `DPG_X95840W` | X95840W digital-potentiometer-based device, with live peak (heart-rate-style) detection |
 | `DPG_X95840W_LIS3DHx2` | DPG_X95840W combined with two LIS3DH accelerometers |
+| `LIS3DHx2` | Two LIS3DH accelerometers, no other front end |
 | `default` | Fallback generic analog config |
 
 New boards are added by pairing a new `<name>.ini` with a new Arduino
@@ -68,6 +69,7 @@ hardware board by board; the two aren't the same guarantee:
 | `DPG_X95840W` | verified | verified | verified | verified |
 | `DPG_X95840W_LIS3DHx2` | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
 | `LIS3DH_SPI` | verified | verified | verified | verified |
+| `LIS3DHx2` | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
 | `i2cSHT35` | verified | verified | verified | verified |
 
 "Verified" means flashed to that real board and exercised through
@@ -76,9 +78,10 @@ hardware-tested" cells build cleanly (correct FQBN, no compile errors)
 but haven't been flashed to that specific board yet -- treat them as a
 reasonable starting point, not a guarantee, until confirmed. Real-world
 hardware testing of these is planned as follow-up work.
-`DPG_X95840W_LIS3DHx2` in particular has no verified cell at all yet: the
-combined circuit itself hasn't been built, so its `.uf2`s are compiled
-from source but have never been flashed to any board.
+`DPG_X95840W_LIS3DHx2` and `LIS3DHx2` in particular have no verified cell
+at all yet: both need two physical LIS3DH units and only one is currently
+available, so neither circuit has been built -- their `.uf2`s are
+compiled from source but have never been flashed to any board.
 
 Whether a front end actually works on a *wireless* board, though, also
 depends on the circuit, not just the chip -- this is a separate question
