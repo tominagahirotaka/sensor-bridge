@@ -80,9 +80,18 @@ def find_bootsel_drives():
                 text = f.read()
         except OSError:
             continue
+        # Confirmed on real hardware: RP2040's INFO_UF2.TXT says
+        # "Model: Raspberry Pi RP2" (NOT "RP2040") -- an earlier version
+        # of this check assumed the full "RP2040" string, which never
+        # matched and misclassified every real RP2040 board as
+        # 'unknown'. RP2350's exact wording hasn't been confirmed on
+        # real hardware yet, so 'RP2350' is checked first (on the
+        # assumption it says the full "RP2350"); the generic 'RP2'
+        # fallback below only catches RP2040, since anything saying
+        # "RP2350" already matched above.
         if 'RP2350' in text:
             found[root] = 'RP2350'
-        elif 'RP2040' in text:
+        elif 'RP2' in text:
             found[root] = 'RP2040'
         else:
             found[root] = 'unknown'
