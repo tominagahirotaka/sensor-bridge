@@ -65,9 +65,9 @@ hardware board by board; the two aren't the same guarantee:
 | Firmware | Pico | Pico 2 | Pico W | Pico 2 W |
 |---|---|---|---|---|
 | `Analog` | verified | verified | verified | verified |
-| `DPG_X95840W` | verified | compiled, not yet hardware-tested | verified | verified |
+| `DPG_X95840W` | verified | verified | verified | verified |
 | `DPG_X95840W_LIS3DHx2` | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
-| `LIS3DH_SPI` | verified | compiled, not yet hardware-tested | verified | verified |
+| `LIS3DH_SPI` | verified | verified | verified | verified |
 | `i2cSHT35` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
 
 "Verified" means flashed to that real board and exercised through
