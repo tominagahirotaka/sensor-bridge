@@ -86,7 +86,7 @@ void initialSetupParam(char ch, string str){
   spi_mosi_pin = get_int(params, "spi_mosi_pin", 19);   // SPI0 default, shared by both units
   spi_miso_pin = get_int(params, "spi_miso_pin", 16);   // SPI0 default, shared by both units
   cs_pin1      = get_int(params, "spi_cs_pin1",  22);   // LIS3DH #1 (GP17 is already used by X95840W)
-  cs_pin2      = get_int(params, "spi_cs_pin2",   2);   // LIS3DH #2
+  cs_pin2      = get_int(params, "spi_cs_pin2",  15);   // LIS3DH #2 (GP15: closest free pin to GP16/18/19/22)
   odr1         = get_int(params, "odr1",          5);   // CTRL_REG1 ODR field; 5 = 100Hz
   fs1          = get_int(params, "fs1",           0);   // 0=+-2g, 1=+-4g, 2=+-8g, 3=+-16g
   odr2         = get_int(params, "odr2",          5);

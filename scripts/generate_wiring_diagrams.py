@@ -285,7 +285,10 @@ def make_sht35():
 # PICO_DPG_X95840W_LIS3DHx2.ino/utils.cpp (i2c_pinno=20 -> SDA=GP20/
 # SCL=GP21 by i2c_begin()'s SDA-then-SDA+1 convention; GP17 as a
 # separate enable/latch pin; port_num=0,1,2 -> analogRead(indx+
-# ANALOGPIN0) -> GP26/27/28; spi_cs_pin1/2=22,2), not a claim about the
+# ANALOGPIN0) -> GP26/27/28; spi_cs_pin1/2=22,15 -- GP15 rather than the
+# also-free GP2, since GP15/GP16 sit directly across from each other at
+# the bottom edge of the Pico's physical header, the closest free pin to
+# the GP16/18/19/22 cluster this circuit already uses), not a claim about the
 # X95840W board's internal schematic or exact physical layout.
 # ---------------------------------------------------------------------
 def make_dpg_x95840w_lis3dhx2():
@@ -357,7 +360,7 @@ def make_dpg_x95840w_lis3dhx2():
             svg.append(wire(trunk_x, y, lx, y, color))
 
     for lx, cs_pin, title in ((lis3dh_x1, 'GP22', 'LIS3DH #1'),
-                              (lis3dh_x2, 'GP2', 'LIS3DH #2')):
+                              (lis3dh_x2, 'GP15', 'LIS3DH #2')):
         svg.append(box(lx, lis3dh_y, lis3dh_w, lis3dh_h, title))
         rows_local = [('VCC', COLORS['power']), ('GND', COLORS['gnd']),
                      ('SCK', COLORS['sig2']), ('SDI', COLORS['sig3']),
