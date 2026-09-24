@@ -384,8 +384,10 @@ for a known offset, per board:
    run history in `calibration.json` rather than overwriting the last
    one, and the value `plot.py` actually uses is the mean across all
    runs so far. Each run also logs the RP2040/RP2350's own on-chip
-   temperature immediately before/after (only while idle, so it can't
-   disturb the recording itself), so a temperature/ppm_offset
+   temperature before and near the end of the recording (chosen so it
+   can't disturb the recording itself, or, for the second reading,
+   only settles for it a moment before the recording actually stops),
+   so a temperature/ppm_offset
    correlation can be checked directly rather than only inferred from
    varying the time of day.
 3. See `calibration.json`'s own `_readme` field for the exact format and

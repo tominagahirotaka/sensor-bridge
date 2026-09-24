@@ -234,11 +234,23 @@ class ApplicationWindow(QMainWindow):
 
     def on_temperature_query(self):
         """No button -- only reachable via the 'temp' sync command (see
-        scripts/calibrate_timing.py). Deliberately does nothing while a
-        board is connected but not initialized (self.rcv.init_flag),
-        same guard as on_checkpoint_button()."""
-        if self.rcv.init_flag:
-            self.rcv.query_temperature()
+        scripts/calibrate_timing.py).
+
+        Regression fix (found on real hardware 2026-09-24): this used to
+        guard on self.rcv.init_flag, copying on_checkpoint_button()'s
+        pattern without checking whether it actually applies here. It
+        doesn't: init_flag tracks whether Run/Test/caliBrate has been
+        pressed at least once (see on_start_button() etc.), which is
+        irrelevant to querying temperature -- the serial connection
+        itself is already open and usable from the moment this window
+        exists (ReceiveCommon.__init__ calls open_serial() synchronously
+        and would have raised before the window ever showed if it
+        failed). With the guard, calibrate_timing.py's *first* query --
+        deliberately sent before 'run', exactly to avoid disturbing the
+        recording -- always silently no-opped, since init_flag is still
+        False at that point."""
+        print(t('window.temp_query_received'))
+        self.rcv.query_temperature()
 
     def on_calib_button(self):
         self.marker = b'c'

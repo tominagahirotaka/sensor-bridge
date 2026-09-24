@@ -194,6 +194,7 @@ class ReceiveCommon:
         the temperature (or None on failure/older firmware) so callers
         can report it immediately without re-reading the header."""
         temp_c = self.board.query_temperature()
+        print(f'[INFO] query_temperature() -> {temp_c=}')
         if temp_c is not None:
             self.p.board.setdefault('temperature_log', []).append(
                 {'when': datetime.datetime.now(), 'temp_c': temp_c})
@@ -418,20 +419,26 @@ class Board:
         calibration measurement) -- a failure here must never interrupt a
         recording, so it never raises.
 
-        Only meaningful when called while the board is idle (not
-        streaming samples): calibrate_timing.py only calls this before
-        'run' and after 'stop', specifically so it never perturbs a
-        recording's sampling cadence."""
+        Best called while the board is idle (not streaming samples), so
+        it can't perturb a recording's sampling cadence: calibrate_timing.py
+        calls this once before 'run', and once more right after the
+        end-of-run mark but still before 'stop' (not after -- see
+        calibrate_timing.py's module docstring for why 'after stop' can't
+        work: get.py's Stop handler writes the recording's .cpt header
+        file, and nothing rewrites it afterward)."""
         self._reset_buffers()
         self._write_marker(b'T')
         orig_timeout = self.ser.timeout
         self.ser.timeout = timeout
         try:
-            line = self.ser.readline().decode('utf-8', 'ignore').strip()
-        except (serial.SerialException, OSError, *_TERMIOS_ERRORS):
+            raw = self.ser.readline()
+        except (serial.SerialException, OSError, *_TERMIOS_ERRORS) as exc:
+            print(f'[INFO] query_temperature(): readline() raised {exc!r}')
             return None
         finally:
             self.ser.timeout = orig_timeout
+        line = raw.decode('utf-8', 'ignore').strip()
+        print(f'[INFO] query_temperature(): raw reply {raw!r}')
         if not line.startswith('temp_c='):
             return None
         try:

@@ -103,6 +103,10 @@ MESSAGES = {
         "en": "Push after Running button",
         "ja": "Runボタンを押した後に実行してください",
     },
+    "window.temp_query_received": {
+        "en": "[INFO] Received 'temp' sync command",
+        "ja": "[INFO] 'temp' syncコマンドを受信",
+    },
     "window.quit_pressed": {
         "en": "Quit button pressed",
         "ja": "Quitボタンが押されました",

@@ -46,11 +46,16 @@ session.
 
 Also logs the board's on-chip temperature (RP2040/RP2350's built-in
 sensor -- die temperature, not the crystal oscillator's own temperature,
-but a useful proxy) immediately before 'run' and immediately after
-'stop', i.e. only while idle: querying it involves a ~1ms ADC
-settle/read that would otherwise land in the middle of the sampling
-loop and show up as a one-off irregular interval if sent while
-streaming. Stored per-run in calibration.json so a temperature
+but a useful proxy) immediately before 'run', and again right after the
+end-of-run 'mark' but still before 'stop' (NOT after -- confirmed on
+real hardware that get.py's Stop handler writes the recording's .cpt
+header file and nothing rewrites it afterward, so anything logged
+post-stop never makes it into the saved file). The second query does
+land a moment before streaming actually stops (a ~1ms ADC settle/read
+that would otherwise show up as a one-off irregular sampling interval
+if sent mid-stream), but only after the mark the ppm_offset calculation
+actually uses, so it can't affect that result. Stored per-run in
+calibration.json so a temperature
 correlation across repeated runs can be checked directly.
 
 Usage:
@@ -62,8 +67,10 @@ import datetime
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
+import threading
 import time
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -84,14 +91,56 @@ POST_TEMP_SETTLE_S = 1
 MIN_RECOMMENDED_DURATION_S = 300
 
 
-def wait_for_listener(pid, timeout):
+def wait_for_listener(timeout):
+    """Wait for any sync listener to appear. Confirmed on real hardware
+    (2026-09-24) that get.py's own launcher process (subprocess.Popen's
+    pid) is never the one that registers -- get.py's main() spawns a
+    child via multiprocessing (see get.py's Process(...) call) for each
+    connected board, and it's that child's window that creates the
+    SyncListener, under a different pid entirely. Matching against the
+    launcher's pid therefore never succeeded and this always timed out,
+    even though a listener reliably showed up within ~2s in practice.
+    Safe to accept *any* listener here rather than matching a specific
+    pid, since main() already refuses to run if any listener existed
+    before this launch (see the pre_existing check)."""
     t0 = time.monotonic()
     while time.monotonic() - t0 < timeout:
-        for entry in list_listeners():
-            if entry['pid'] == pid:
-                return True
+        if list_listeners():
+            return True
         time.sleep(0.2)
     return False
+
+
+_TEMP_LINE_RE = re.compile(r"query_temperature\(\) -> temp_c=(None|[-\d.]+)")
+
+
+def read_subprocess_output(proc, temp_readings):
+    """Continuously drain proc.stdout (get.py's own console output,
+    merged stderr) for the whole life of the subprocess: echoes each
+    line prefixed "[get.py] ", and appends any temperature reading
+    (float, or None on failure) found in a
+    "[INFO] query_temperature() -> temp_c=..." line, in the order they
+    appear, to temp_readings.
+
+    Why read temperature this way instead of from the saved recording's
+    header (which mylib/communicate.py's query_temperature() *does* also
+    log into): get.py's Stop handler writes the .cpt header file once,
+    and nothing rewrites it afterward, so a temperature queried after
+    'stop' (the only time it's safe to query at all -- see the 'temp'
+    comment in main()) never reaches the saved file. Reading it directly
+    off get.py's own stdout sidesteps that entirely.
+
+    Must run in its own thread for the whole subprocess lifetime, not
+    just read after the fact: with stdout=PIPE, an unread pipe fills up
+    and blocks the child's next write once full, which would silently
+    stall a long unattended recording if nothing were draining it
+    throughout."""
+    for line in proc.stdout:
+        line = line.rstrip('\n')
+        print(f'[get.py] {line}')
+        m = _TEMP_LINE_RE.search(line)
+        if m:
+            temp_readings.append(None if m.group(1) == 'None' else float(m.group(1)))
 
 
 def find_new_dat_file(dir_name, since):
@@ -148,17 +197,28 @@ def main():
 
     launch_time = datetime.datetime.now()
     print(f"Launching: python3 get.py -i {ini_path} -sync")
-    proc = subprocess.Popen([sys.executable, 'get.py', '-i', ini_path, '-sync'], cwd=REPO_ROOT)
+    # stdout/stderr piped (not inherited) so this script can read
+    # get.py's own "[INFO] query_temperature() -> temp_c=..." lines
+    # directly -- see read_subprocess_output()'s docstring for why
+    # temperature can't just be read back from the saved recording.
+    # PYTHONUNBUFFERED=1 so those lines arrive promptly instead of
+    # sitting in a block-buffered pipe until the process exits.
+    child_env = dict(os.environ, PYTHONUNBUFFERED='1')
+    proc = subprocess.Popen([sys.executable, 'get.py', '-i', ini_path, '-sync'],
+                            cwd=REPO_ROOT, env=child_env, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, text=True, bufsize=1)
+    temp_readings = []
+    reader_thread = threading.Thread(target=read_subprocess_output,
+                                     args=(proc, temp_readings), daemon=True)
+    reader_thread.start()
 
     try:
-        if not wait_for_listener(proc.pid, STARTUP_TIMEOUT_S):
+        if not wait_for_listener(STARTUP_TIMEOUT_S):
             sys.exit(f"get.py did not register as a sync listener within "
                      f"{STARTUP_TIMEOUT_S}s (board not connected, or the window "
                      "failed to open). Check the get.py output above.")
 
-        # Queried while idle, before 'run' and after 'stop' -- never
-        # during active streaming, so this can't perturb the recording's
-        # sampling cadence (see Board.query_temperature()'s docstring).
+        # Queried while genuinely idle (before 'run' even starts).
         print("Querying on-chip temperature before starting ('temp') ...")
         send_trigger('temp')
         time.sleep(POST_TEMP_SETTLE_S)
@@ -178,6 +238,23 @@ def main():
         send_trigger('stop')
         time.sleep(POST_STOP_SETTLE_S)
 
+        # Deliberately AFTER 'stop' has fully settled, not before or
+        # during: sending 'T' while the board is actively streaming
+        # samples was tested on real hardware and found to corrupt the
+        # recording outright (confirmed via a wildly wrong
+        # mean_sample_interval and ppm_offset) -- the firmware's 'T'
+        # reply is plain text interleaved into what the PC side's reader
+        # thread strictly expects to be fixed-size binary sample frames,
+        # desyncing frame alignment for the rest of the stream. This is
+        # a real protocol-level hazard, not just a ~1ms timing nuisance
+        # as originally assumed -- 'temp' must never be sent while a
+        # board is recording. Also can't just move back before 'stop'
+        # and rely on the saved .cpt for it, the way the pre-'run'
+        # reading is recoverable from the header: get.py's Stop handler
+        # writes the recording's .cpt header file and nothing rewrites
+        # it afterward, so anything queried post-stop never reaches the
+        # saved file -- hence reading it directly off get.py's own
+        # stdout instead (see read_subprocess_output()).
         print("Querying on-chip temperature after stopping ('temp') ...")
         send_trigger('temp')
         time.sleep(POST_TEMP_SETTLE_S)
@@ -214,10 +291,12 @@ def main():
 
     # Best-effort: None for either/both if the board's firmware doesn't
     # support 'T' (see Board.query_temperature()) -- never blocks writing
-    # the calibration result itself.
-    temp_log = header.board.get('temperature_log', [])
-    temp_start = temp_log[0]['temp_c'] if len(temp_log) > 0 else None
-    temp_end = temp_log[-1]['temp_c'] if len(temp_log) > 1 else None
+    # the calibration result itself. Read from temp_readings (captured
+    # off get.py's own stdout by read_subprocess_output() as it ran),
+    # not from the saved recording's header -- see that function's
+    # docstring for why the header can't be used for the second reading.
+    temp_start = temp_readings[0] if len(temp_readings) > 0 else None
+    temp_end = temp_readings[1] if len(temp_readings) > 1 else None
     if temp_start is not None:
         print(f"on-chip temperature: start={temp_start:.2f}C"
               + (f" end={temp_end:.2f}C" if temp_end is not None else " (no end reading)"))
