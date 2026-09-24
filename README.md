@@ -68,7 +68,7 @@ hardware board by board; the two aren't the same guarantee:
 | `DPG_X95840W` | verified | verified | verified | verified |
 | `DPG_X95840W_LIS3DHx2` | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
 | `LIS3DH_SPI` | verified | verified | verified | verified |
-| `i2cSHT35` | verified | compiled, not yet hardware-tested | compiled, not yet hardware-tested | compiled, not yet hardware-tested |
+| `i2cSHT35` | verified | verified | verified | verified |
 
 "Verified" means flashed to that real board and exercised through
 `get.py`/`plot.py` during development. The "compiled, not yet
