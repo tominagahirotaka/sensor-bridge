@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
-"""Regenerate the wiring-diagram SVGs referenced from README.md's
-"Wiring diagrams" section: docs/wiring/{lis3dh,sht35,mic}.svg.
+"""Regenerate the wiring-diagram SVGs under docs/wiring/. Three
+(lis3dh/sht35/mic) are linked from README.md's "Wiring diagrams" section;
+the rest (dpg_x95840w_lis3dhx2, lis3dhx2/x3/x4) cover circuits that
+haven't been physically built yet (see README.md's hardware-verification
+matrix) and are generated for reference but deliberately not linked from
+that section until confirmed on real hardware.
 
 Pin assignments are hand-transcribed from the actual .ini configs and
 firmware source (LIS3DH.ini's spi_*_pin defaults; SHT35.ini's i2c_pinno
 plus PICO_i2cSHT35.ino's i2c_begin(), which pairs SDA=pin with
-SCL=pin+1; the mic's GP26/ADC0 per Analog.ini) -- if any of those change,
+SCL=pin+1; the mic's GP26/ADC0 per Analog.ini; the LIS3DHx2/x3/x4 and
+DPG_X95840W_LIS3DHx2 spi_cs_pin* defaults) -- if any of those change,
 re-run this script rather than hand-editing the SVGs. Diagrams label
 wires by function (VCC/GND/SDA/SCL/CS/...), not by physical pin
 position, so they don't depend on knowing a specific breakout board
@@ -383,6 +388,93 @@ def make_dpg_x95840w_lis3dhx2():
     return '\n'.join(svg)
 
 
+# ---------------------------------------------------------------------
+# LIS3DHx2/x3/x4: Pico + N LIS3DH units sharing SPI0 (SCK/MOSI/MISO), no
+# X95840W front end (unlike DPG_X95840W_LIS3DHx2 above, so GP17 is free
+# and used as CS1 here, matching the single-LIS3DH default). CS2/CS3/CS4
+# use GP20/GP21/GP22 -- on the Pico's physical header these sit
+# immediately next to GP16-19, the closest free pins to the shared bus
+# this sketch already uses (see PICO_LIS3DHx2/x3/x4's utils.h and the
+# corresponding .ini files for the same reasoning). Like
+# DPG_X95840W_LIS3DHx2 above, none of these circuits has been physically
+# built yet (blocked on having more than one physical LIS3DH on hand --
+# see README.md's hardware-verification matrix), so these diagrams are
+# generated from the verified .ini/firmware pin assignments but not
+# linked from README.md's "Wiring diagrams" section until confirmed.
+# ---------------------------------------------------------------------
+def make_lis3dhxn(n, cs_pins):
+    assert len(cs_pins) == n
+    lis3dh_w, lis3dh_h = 200, 190
+    lis3dh_gap = 40
+    lis3dh_y = 60
+    first_x = 420
+    box_xs = [first_x + i * (lis3dh_w + lis3dh_gap) for i in range(n)]
+
+    pico_x, pico_y, pico_w = 40, 40, 190
+    pico_h = lis3dh_y + lis3dh_h - pico_y
+
+    shared_signals = [
+        ('3V3', 'VCC', COLORS['power']),
+        ('GND', 'GND', COLORS['gnd']),
+        ('GP18', 'SCK', COLORS['sig2']),
+        ('GP19', 'SDI (MOSI)', COLORS['sig3']),
+        ('GP16', 'SDO (MISO)', COLORS['sig4']),
+    ]
+    spi_row_top, spi_row_gap = lis3dh_y + 30, 20
+
+    W = box_xs[-1] + lis3dh_w + 40
+    H = lis3dh_y + lis3dh_h + 90
+
+    svg = [svg_header(W, H, f'Pico to {n}x LIS3DH wiring diagram '
+                            '(untested, no X95840W front end)')]
+    svg.append(box(pico_x, pico_y, pico_w, pico_h, 'Raspberry Pi Pico'))
+
+    svg.append(text_bg(pico_x + pico_w + 40, lis3dh_y - 14,
+                       'SPI0 (shared bus)', 'start', size=13, weight='bold'))
+    trunk_x = pico_x + pico_w + 70
+    for i, (pico_label, sig, color) in enumerate(shared_signals):
+        y = spi_row_top + i * spi_row_gap
+        stub, x_end = pin_stub(pico_x + pico_w, y, pico_label, 'right', color, length=18)
+        svg.append(wire(x_end, y, trunk_x, y, color))
+        svg.append(stub)
+        for lx in box_xs:
+            svg.append(wire(trunk_x, y, lx, y, color))
+
+    for i, lx in enumerate(box_xs):
+        svg.append(box(lx, lis3dh_y, lis3dh_w, lis3dh_h, f'LIS3DH #{i + 1}'))
+        rows_local = [('VCC', COLORS['power']), ('GND', COLORS['gnd']),
+                     ('SCK', COLORS['sig2']), ('SDI', COLORS['sig3']),
+                     ('SDO', COLORS['sig4']),
+                     (f'CS ← {cs_pins[i]} (not shared)', COLORS['muted'])]
+        for j, (label, color) in enumerate(rows_local):
+            yy = lis3dh_y + 34 + j * 20
+            svg.append(f'<circle cx="{lx + 14}" cy="{yy - 4}" r="3" fill="{color}"/>')
+            svg.append(f'<text x="{lx + 24}" y="{yy}" {FONT} font-size="11.5" '
+                       f'fill="#111827">{label}</text>')
+
+    svg.append(legend(40, H - 46, [
+        (COLORS['power'], 'power'),
+        (COLORS['gnd'], 'ground'),
+    ]))
+    svg.append(caption(W, H - 10,
+                       'GPIO assignments verified from .ini/firmware source only -- '
+                       'circuit not yet physically built (see README.md)'))
+    svg.append(svg_footer())
+    return '\n'.join(svg)
+
+
+def make_lis3dhx2():
+    return make_lis3dhxn(2, ['GP17', 'GP20'])
+
+
+def make_lis3dhx3():
+    return make_lis3dhxn(3, ['GP17', 'GP20', 'GP21'])
+
+
+def make_lis3dhx4():
+    return make_lis3dhxn(4, ['GP17', 'GP20', 'GP21', 'GP22'])
+
+
 if __name__ == '__main__':
     out_dir = 'docs/wiring'
     os.makedirs(out_dir, exist_ok=True)
@@ -394,4 +486,10 @@ if __name__ == '__main__':
         f.write(make_sht35())
     with open(f'{out_dir}/dpg_x95840w_lis3dhx2.svg', 'w') as f:
         f.write(make_dpg_x95840w_lis3dhx2())
+    with open(f'{out_dir}/lis3dhx2.svg', 'w') as f:
+        f.write(make_lis3dhx2())
+    with open(f'{out_dir}/lis3dhx3.svg', 'w') as f:
+        f.write(make_lis3dhx3())
+    with open(f'{out_dir}/lis3dhx4.svg', 'w') as f:
+        f.write(make_lis3dhx4())
     print('wrote', out_dir)
