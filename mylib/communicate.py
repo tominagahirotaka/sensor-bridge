@@ -425,26 +425,45 @@ class Board:
         end-of-run mark but still before 'stop' (not after -- see
         calibrate_timing.py's module docstring for why 'after stop' can't
         work: get.py's Stop handler writes the recording's .cpt header
-        file, and nothing rewrites it afterward)."""
+        file, and nothing rewrites it afterward).
+
+        Reads and discards lines until one starts with "temp_c=" (or the
+        overall `timeout` budget runs out): confirmed on real hardware
+        that PICO_DPG_X95840W.ino has a pre-existing debug echo
+        (`Serial.print("ch="); Serial.println(ch);`, run for every
+        command byte, right before the actual 'T' handler) that used to
+        be read as the whole reply, silently discarding the real
+        temp_c=... line that follows it. Harmless for boards that don't
+        echo anything -- the first line read is then already the
+        answer."""
         self._reset_buffers()
         self._write_marker(b'T')
         orig_timeout = self.ser.timeout
-        self.ser.timeout = timeout
+        deadline = time.monotonic() + timeout
         try:
-            raw = self.ser.readline()
-        except (serial.SerialException, OSError, *_TERMIOS_ERRORS) as exc:
-            print(f'[INFO] query_temperature(): readline() raised {exc!r}')
-            return None
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                self.ser.timeout = remaining
+                try:
+                    raw = self.ser.readline()
+                except (serial.SerialException, OSError, *_TERMIOS_ERRORS) as exc:
+                    print(f'[INFO] query_temperature(): readline() raised {exc!r}')
+                    return None
+                if not raw:
+                    return None  # timed out with nothing more coming
+                print(f'[INFO] query_temperature(): raw reply {raw!r}')
+                line = raw.decode('utf-8', 'ignore').strip()
+                if line.startswith('temp_c='):
+                    try:
+                        return float(line[len('temp_c='):])
+                    except ValueError:
+                        return None
+                # else: some other line (e.g. a firmware debug echo) --
+                # discard and keep reading until temp_c=... or timeout
         finally:
             self.ser.timeout = orig_timeout
-        line = raw.decode('utf-8', 'ignore').strip()
-        print(f'[INFO] query_temperature(): raw reply {raw!r}')
-        if not line.startswith('temp_c='):
-            return None
-        try:
-            return float(line[len('temp_c='):])
-        except ValueError:
-            return None
 
     def connect_serial(self, marker):
         # Flush *before* writing, not after: some boards (e.g. X95840W,

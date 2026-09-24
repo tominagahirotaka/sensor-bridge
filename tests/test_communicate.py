@@ -392,6 +392,19 @@ class _FakeSerialLine:
         pass
 
 
+class _FakeSerialQueue(_FakeSerialLine):
+    """Like _FakeSerialLine, but readline() pops one entry per call from
+    a fixed queue (repeating the last entry once exhausted), for testing
+    query_temperature()'s "skip lines that aren't temp_c=..." loop."""
+
+    def __init__(self, lines):
+        super().__init__(lines[-1])
+        self._lines = list(lines)
+
+    def readline(self):
+        return self._lines.pop(0) if self._lines else self.readline_return
+
+
 class TestQueryTemperature:
     """Board.query_temperature() sends 'T' and parses "temp_c=<float>";
     must degrade to None (never raise) for anything else, since it's a
@@ -411,7 +424,23 @@ class TestQueryTemperature:
     def test_garbled_reply_returns_none_not_a_crash(self):
         board = comm.Board.__new__(comm.Board)
         board.ser = _FakeSerialLine(b'not the expected format\r\n')
-        assert board.query_temperature() is None
+        assert board.query_temperature(timeout=0.05) is None
+
+    def test_skips_a_leading_debug_echo_line(self):
+        # Regression test: PICO_DPG_X95840W.ino has a pre-existing debug
+        # print ('Serial.print("ch="); Serial.println(ch);') that fires
+        # for every command byte, right before the 'T' handler's own
+        # reply -- confirmed on real hardware this used to be read as
+        # the whole answer, silently discarding the real temp_c=... line
+        # right after it.
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialQueue([b'ch=T\r\n', b'temp_c=29.95\r\n'])
+        assert board.query_temperature() == pytest.approx(29.95)
+
+    def test_gives_up_after_only_garbage_lines_within_the_timeout(self):
+        board = comm.Board.__new__(comm.Board)
+        board.ser = _FakeSerialQueue([b'ch=T\r\n', b'ch=T\r\n', b'ch=T\r\n'])
+        assert board.query_temperature(timeout=0.05) is None
 
     def test_unparseable_number_returns_none_not_a_crash(self):
         board = comm.Board.__new__(comm.Board)

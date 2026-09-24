@@ -1,5 +1,51 @@
 {
   "_readme": "Optional per-unit absolute-time calibration. Each key under 'boards' is one physical board's factory-burned unique ID, exactly as reported in this project's serial handshake (visible in the console as '[INFO] board_program=... chip_id=...' when a board connects, or in a .dat file's header). 'ppm_offset' is how many parts-per-million the device's reported elapsed time exceeds true elapsed time, as measured by comparing the device's own reported duration against an independent time reference (e.g. an NTP-synchronized PC clock, over a long recording -- see README.md). Positive means the device's clock runs fast. plot.py applies corrected_time = raw_time / (1 + ppm_offset / 1e6) to any recording from a board listed here; boards with no entry are left uncorrected (this is the default -- calibration is opt-in, per unit, and this file starts empty). This is a per-unit measurement, not a general claim about the board type -- see README.md's timing-precision discussion for why. A single run's ppm_offset is noisy (see calibrate_timing.py's module docstring), so scripts/calibrate_timing.py accumulates repeated runs against the same board in 'runs' rather than overwriting; the top-level 'ppm_offset' it writes is the mean across 'runs' ('n_runs' of them), which is what plot.py actually reads -- run it several times (ideally at different times/room temperatures) rather than relying on a single run. Each run entry also records 'temp_c_start'/'temp_c_end' -- the board's own on-chip die temperature (Celsius) immediately before/after that run, queried only while idle so it never perturbs the recording's sampling cadence (null if unavailable, e.g. older firmware) -- so ppm_offset can be checked for a temperature correlation across runs directly, instead of only inferring it from varying the time of day.",
   "boards": {
+    "0204A8DFD2C08788": {
+      "runs": [
+        {
+          "ppm_offset": 7.156428584651472,
+          "measured_from": "data/origin2022_20260924_144827.dat",
+          "measured_at": "2026-09-24T15:18:34",
+          "wall_clock_elapsed_s": 1799.81115,
+          "temp_c_start": null,
+          "temp_c_end": null
+        },
+        {
+          "ppm_offset": -14.896446063519566,
+          "measured_from": "data/origin2022_20260924_152059.dat",
+          "measured_at": "2026-09-24T15:51:06",
+          "wall_clock_elapsed_s": 1799.810975,
+          "temp_c_start": 23.86,
+          "temp_c_end": 23.86
+        },
+        {
+          "ppm_offset": -15.888786899151112,
+          "measured_from": "data/origin2022_20260924_155126.dat",
+          "measured_at": "2026-09-24T16:21:33",
+          "wall_clock_elapsed_s": 1799.80882,
+          "temp_c_start": 23.86,
+          "temp_c_end": 22.93
+        },
+        {
+          "ppm_offset": 32.48746726650957,
+          "measured_from": "data/origin2022_20260924_162152.dat",
+          "measured_at": "2026-09-24T16:51:59",
+          "wall_clock_elapsed_s": 1799.808874,
+          "temp_c_start": 22.93,
+          "temp_c_end": 23.86
+        },
+        {
+          "ppm_offset": -18.464600986667026,
+          "measured_from": "data/origin2022_20260924_165217.dat",
+          "measured_at": "2026-09-24T17:22:24",
+          "wall_clock_elapsed_s": 1799.810788,
+          "temp_c_start": 23.39,
+          "temp_c_end": 23.86
+        }
+      ],
+      "n_runs": 5,
+      "ppm_offset": -1.9211876196353326
+    }
   }
 }
