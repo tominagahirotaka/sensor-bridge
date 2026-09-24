@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 764" role="img" aria-label="Pico to X95840W + 2x LIS3DH wiring diagram (untested combined circuit)">
+<rect x="0" y="0" width="960" height="764" fill="#ffffff"/>
+<rect x="40" y="40" width="190" height="634" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="135.0" y="64" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">Raspberry Pi Pico</text>
+<rect x="520" y="30" width="230" height="344" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="635.0" y="54" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">X95840W PPG front end (bespoke, no schematic)</text>
+<line x1="256" y1="90" x2="494" y2="90" stroke="#dc2626" stroke-width="3"/>
+<line x1="230" y1="90" x2="256" y2="90" stroke="#dc2626" stroke-width="3"/>
+<circle cx="256" cy="90" r="3.5" fill="#dc2626"/>
+<rect x="263.0" y="77.5" width="75.8" height="18.5" fill="#ffffff"/>
+<text x="266" y="94" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">5V (VBUS)</text>
+<line x1="520" y1="90" x2="494" y2="90" stroke="#dc2626" stroke-width="3"/>
+<circle cx="494" cy="90" r="3.5" fill="#dc2626"/>
+<rect x="457.8" y="77.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="484" y="94" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">VCC</text>
+<line x1="256" y1="122" x2="494" y2="122" stroke="#374151" stroke-width="3"/>
+<line x1="230" y1="122" x2="256" y2="122" stroke="#374151" stroke-width="3"/>
+<circle cx="256" cy="122" r="3.5" fill="#374151"/>
+<rect x="263.0" y="109.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="266" y="126" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GND</text>
+<line x1="520" y1="122" x2="494" y2="122" stroke="#374151" stroke-width="3"/>
+<circle cx="494" cy="122" r="3.5" fill="#374151"/>
+<rect x="457.8" y="109.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="484" y="126" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GND</text>
+<line x1="256" y1="154" x2="494" y2="154" stroke="#2563eb" stroke-width="3"/>
+<line x1="230" y1="154" x2="256" y2="154" stroke="#2563eb" stroke-width="3"/>
+<circle cx="256" cy="154" r="3.5" fill="#2563eb"/>
+<rect x="263.0" y="141.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="266" y="158" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP17</text>
+<line x1="520" y1="154" x2="494" y2="154" stroke="#2563eb" stroke-width="3"/>
+<circle cx="494" cy="154" r="3.5" fill="#2563eb"/>
+<rect x="341.5" y="141.5" width="145.5" height="18.5" fill="#ffffff"/>
+<text x="484" y="158" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">ENABLE (I2C latch)</text>
+<line x1="256" y1="186" x2="494" y2="186" stroke="#d97706" stroke-width="3"/>
+<line x1="230" y1="186" x2="256" y2="186" stroke="#d97706" stroke-width="3"/>
+<circle cx="256" cy="186" r="3.5" fill="#d97706"/>
+<rect x="263.0" y="173.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="266" y="190" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP20</text>
+<line x1="520" y1="186" x2="494" y2="186" stroke="#d97706" stroke-width="3"/>
+<circle cx="494" cy="186" r="3.5" fill="#d97706"/>
+<rect x="457.8" y="173.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="484" y="190" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">SDA</text>
+<line x1="256" y1="218" x2="494" y2="218" stroke="#059669" stroke-width="3"/>
+<line x1="230" y1="218" x2="256" y2="218" stroke="#059669" stroke-width="3"/>
+<circle cx="256" cy="218" r="3.5" fill="#059669"/>
+<rect x="263.0" y="205.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="266" y="222" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP21</text>
+<line x1="520" y1="218" x2="494" y2="218" stroke="#059669" stroke-width="3"/>
+<circle cx="494" cy="218" r="3.5" fill="#059669"/>
+<rect x="457.8" y="205.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="484" y="222" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">SCL</text>
+<line x1="256" y1="250" x2="494" y2="250" stroke="#7c3aed" stroke-width="3"/>
+<line x1="230" y1="250" x2="256" y2="250" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="256" cy="250" r="3.5" fill="#7c3aed"/>
+<rect x="263.0" y="237.5" width="91.2" height="18.5" fill="#ffffff"/>
+<text x="266" y="254" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP26 (ADC0)</text>
+<line x1="520" y1="250" x2="494" y2="250" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="494" cy="250" r="3.5" fill="#7c3aed"/>
+<rect x="442.2" y="237.5" width="44.8" height="18.5" fill="#ffffff"/>
+<text x="484" y="254" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">PORT0</text>
+<line x1="256" y1="282" x2="494" y2="282" stroke="#2563eb" stroke-width="3"/>
+<line x1="230" y1="282" x2="256" y2="282" stroke="#2563eb" stroke-width="3"/>
+<circle cx="256" cy="282" r="3.5" fill="#2563eb"/>
+<rect x="263.0" y="269.5" width="91.2" height="18.5" fill="#ffffff"/>
+<text x="266" y="286" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP27 (ADC1)</text>
+<line x1="520" y1="282" x2="494" y2="282" stroke="#2563eb" stroke-width="3"/>
+<circle cx="494" cy="282" r="3.5" fill="#2563eb"/>
+<rect x="442.2" y="269.5" width="44.8" height="18.5" fill="#ffffff"/>
+<text x="484" y="286" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">PORT1</text>
+<line x1="256" y1="314" x2="494" y2="314" stroke="#d97706" stroke-width="3"/>
+<line x1="230" y1="314" x2="256" y2="314" stroke="#d97706" stroke-width="3"/>
+<circle cx="256" cy="314" r="3.5" fill="#d97706"/>
+<rect x="263.0" y="301.5" width="91.2" height="18.5" fill="#ffffff"/>
+<text x="266" y="318" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP28 (ADC2)</text>
+<line x1="520" y1="314" x2="494" y2="314" stroke="#d97706" stroke-width="3"/>
+<circle cx="494" cy="314" r="3.5" fill="#d97706"/>
+<rect x="442.2" y="301.5" width="44.8" height="18.5" fill="#ffffff"/>
+<text x="484" y="318" text-anchor="end" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">PORT2</text>
+<rect x="267.0" y="457.0" width="143.0" height="19.0" fill="#ffffff"/>
+<text x="270" y="474" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#111827">SPI0 (shared bus)</text>
+<line x1="248" y1="514" x2="300" y2="514" stroke="#dc2626" stroke-width="3"/>
+<line x1="230" y1="514" x2="248" y2="514" stroke="#dc2626" stroke-width="3"/>
+<circle cx="248" cy="514" r="3.5" fill="#dc2626"/>
+<rect x="255.0" y="501.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="258" y="518" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">3V3</text>
+<line x1="300" y1="514" x2="420" y2="514" stroke="#dc2626" stroke-width="3"/>
+<line x1="300" y1="514" x2="700" y2="514" stroke="#dc2626" stroke-width="3"/>
+<line x1="248" y1="534" x2="300" y2="534" stroke="#374151" stroke-width="3"/>
+<line x1="230" y1="534" x2="248" y2="534" stroke="#374151" stroke-width="3"/>
+<circle cx="248" cy="534" r="3.5" fill="#374151"/>
+<rect x="255.0" y="521.5" width="29.2" height="18.5" fill="#ffffff"/>
+<text x="258" y="538" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GND</text>
+<line x1="300" y1="534" x2="420" y2="534" stroke="#374151" stroke-width="3"/>
+<line x1="300" y1="534" x2="700" y2="534" stroke="#374151" stroke-width="3"/>
+<line x1="248" y1="554" x2="300" y2="554" stroke="#d97706" stroke-width="3"/>
+<line x1="230" y1="554" x2="248" y2="554" stroke="#d97706" stroke-width="3"/>
+<circle cx="248" cy="554" r="3.5" fill="#d97706"/>
+<rect x="255.0" y="541.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="258" y="558" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP18</text>
+<line x1="300" y1="554" x2="420" y2="554" stroke="#d97706" stroke-width="3"/>
+<line x1="300" y1="554" x2="700" y2="554" stroke="#d97706" stroke-width="3"/>
+<line x1="248" y1="574" x2="300" y2="574" stroke="#059669" stroke-width="3"/>
+<line x1="230" y1="574" x2="248" y2="574" stroke="#059669" stroke-width="3"/>
+<circle cx="248" cy="574" r="3.5" fill="#059669"/>
+<rect x="255.0" y="561.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="258" y="578" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP19</text>
+<line x1="300" y1="574" x2="420" y2="574" stroke="#059669" stroke-width="3"/>
+<line x1="300" y1="574" x2="700" y2="574" stroke="#059669" stroke-width="3"/>
+<line x1="248" y1="594" x2="300" y2="594" stroke="#7c3aed" stroke-width="3"/>
+<line x1="230" y1="594" x2="248" y2="594" stroke="#7c3aed" stroke-width="3"/>
+<circle cx="248" cy="594" r="3.5" fill="#7c3aed"/>
+<rect x="255.0" y="581.5" width="37.0" height="18.5" fill="#ffffff"/>
+<text x="258" y="598" text-anchor="start" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" fill="#111827">GP16</text>
+<line x1="300" y1="594" x2="420" y2="594" stroke="#7c3aed" stroke-width="3"/>
+<line x1="300" y1="594" x2="700" y2="594" stroke="#7c3aed" stroke-width="3"/>
+<rect x="420" y="484" width="220" height="190" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="530.0" y="508" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">LIS3DH #1</text>
+<circle cx="434" cy="514" r="3" fill="#dc2626"/>
+<text x="444" y="518" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">VCC</text>
+<circle cx="434" cy="534" r="3" fill="#374151"/>
+<text x="444" y="538" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">GND</text>
+<circle cx="434" cy="554" r="3" fill="#d97706"/>
+<text x="444" y="558" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SCK</text>
+<circle cx="434" cy="574" r="3" fill="#059669"/>
+<text x="444" y="578" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SDI</text>
+<circle cx="434" cy="594" r="3" fill="#7c3aed"/>
+<text x="444" y="598" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SDO</text>
+<circle cx="434" cy="614" r="3" fill="#9ca3af"/>
+<text x="444" y="618" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">CS ← GP22 (not shared)</text>
+<rect x="700" y="484" width="220" height="190" rx="8" fill="#f8fafc" stroke="#1f2937" stroke-width="2"/>
+<text x="810.0" y="508" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" fill="#111827">LIS3DH #2</text>
+<circle cx="714" cy="514" r="3" fill="#dc2626"/>
+<text x="724" y="518" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">VCC</text>
+<circle cx="714" cy="534" r="3" fill="#374151"/>
+<text x="724" y="538" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">GND</text>
+<circle cx="714" cy="554" r="3" fill="#d97706"/>
+<text x="724" y="558" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SCK</text>
+<circle cx="714" cy="574" r="3" fill="#059669"/>
+<text x="724" y="578" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SDI</text>
+<circle cx="714" cy="594" r="3" fill="#7c3aed"/>
+<text x="724" y="598" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">SDO</text>
+<circle cx="714" cy="614" r="3" fill="#9ca3af"/>
+<text x="724" y="618" font-family="Helvetica, Arial, sans-serif" font-size="11.5" fill="#111827">CS ← GP2 (not shared)</text>
+<line x1="40" y1="718" x2="62" y2="718" stroke="#dc2626" stroke-width="4"/>
+<text x="70" y="722" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#374151">power</text>
+<line x1="40" y1="738" x2="62" y2="738" stroke="#374151" stroke-width="4"/>
+<text x="70" y="742" font-family="Helvetica, Arial, sans-serif" font-size="12" fill="#374151">ground</text>
+<text x="480.0" y="754" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="11" fill="#6b7280">GPIO assignments verified from .ini/firmware source only -- circuit not yet physically built (see README.md)</text>
+</svg>

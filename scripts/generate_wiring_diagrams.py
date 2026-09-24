@@ -270,6 +270,116 @@ def make_sht35():
     return '\n'.join(svg)
 
 
+# ---------------------------------------------------------------------
+# DPG_X95840W_LIS3DHx2: Pico + the X95840W PPG front end + 2x LIS3DH
+# sharing SPI0 (CS moved off GP17, which X95840W uses, to GP22/GP2).
+#
+# UNLIKE the other three diagrams, this one is NOT transcribed from a
+# known breakout board's silkscreen -- the X95840W front end is a
+# bespoke circuit with no schematic in this repository (see the paper's
+# Illustrative examples section), and the combined circuit itself has
+# never been physically built (see docs/adding-a-board.md and
+# README.md's hardware-verification matrix: DPG_X95840W_LIS3DHx2 is
+# "compiled, not yet hardware-tested" on every board). Every pin shown
+# here is a verified GPIO assignment from DPG_X95840W_LIS3DHx2.ini and
+# PICO_DPG_X95840W_LIS3DHx2.ino/utils.cpp (i2c_pinno=20 -> SDA=GP20/
+# SCL=GP21 by i2c_begin()'s SDA-then-SDA+1 convention; GP17 as a
+# separate enable/latch pin; port_num=0,1,2 -> analogRead(indx+
+# ANALOGPIN0) -> GP26/27/28; spi_cs_pin1/2=22,2), not a claim about the
+# X95840W board's internal schematic or exact physical layout.
+# ---------------------------------------------------------------------
+def make_dpg_x95840w_lis3dhx2():
+    x95840w_rows = [
+        ('5V (VBUS)', 'VCC', COLORS['power']),
+        ('GND', 'GND', COLORS['gnd']),
+        ('GP17', 'ENABLE (I2C latch)', COLORS['sig1']),
+        ('GP20', 'SDA', COLORS['sig2']),
+        ('GP21', 'SCL', COLORS['sig3']),
+        ('GP26 (ADC0)', 'PORT0', COLORS['sig4']),
+        ('GP27 (ADC1)', 'PORT1', COLORS['sig1']),
+        ('GP28 (ADC2)', 'PORT2', COLORS['sig2']),
+    ]
+    pico_x, pico_y, pico_w = 40, 40, 190
+    row_top, row_gap = 90, 32
+    x95840w_x = 520
+    x95840w_box_h = row_top + (len(x95840w_rows) - 1) * row_gap + 40
+    x95840w_box = (x95840w_x, 30, 230, x95840w_box_h - 10)
+
+    lis3dh_w, lis3dh_h = 220, 190
+    section_gap = 110
+    lis3dh_y = x95840w_box[1] + x95840w_box[3] + section_gap
+    lis3dh_x1, lis3dh_x2 = 420, 700
+
+    # 5 shared signals routed from the Pico (power + SPI0), aligned so
+    # each wire's y exactly matches the corresponding internal row's dot
+    # in the LIS3DH boxes below (see the "- 4" in that loop).
+    shared_signals = [
+        ('3V3', 'VCC', COLORS['power']),
+        ('GND', 'GND', COLORS['gnd']),
+        ('GP18', 'SCK', COLORS['sig2']),
+        ('GP19', 'SDI (MOSI)', COLORS['sig3']),
+        ('GP16', 'SDO (MISO)', COLORS['sig4']),
+    ]
+    spi_row_top, spi_row_gap = lis3dh_y + 30, 20
+
+    pico_h = lis3dh_y + lis3dh_h - pico_y
+    W = lis3dh_x2 + lis3dh_w + 40
+    H = lis3dh_y + lis3dh_h + 90
+
+    svg = [svg_header(W, H, 'Pico to X95840W + 2x LIS3DH wiring diagram '
+                            '(untested combined circuit)')]
+    svg.append(box(pico_x, pico_y, pico_w, pico_h, 'Raspberry Pi Pico'))
+    svg.append(box(*x95840w_box, 'X95840W PPG front end (bespoke, no schematic)'))
+
+    for i, (pico_label, dev_label, color) in enumerate(x95840w_rows):
+        y = row_top + i * row_gap
+        stub_l, x_l = pin_stub(pico_x + pico_w, y, pico_label, 'right', color)
+        stub_r, x_r = pin_stub(x95840w_box[0], y, dev_label, 'left', color)
+        svg.append(wire(x_l, y, x_r, y, color))
+        svg.append(stub_l)
+        svg.append(stub_r)
+
+    # LIS3DH x2, sharing power + SPI0 (SCK/MOSI/MISO). CS is per-device
+    # (GP22 for #1, GP2 for #2) and shown as a label inside each box,
+    # the same way the SHT35 diagram shows each sensor's ADDR strap,
+    # rather than as a wire drawn all the way from the Pico -- with two
+    # side-by-side target boxes, a genuinely per-device signal would
+    # otherwise have to visually cross the shared-bus trunk.
+    svg.append(text_bg(pico_x + pico_w + 40, lis3dh_y - 14,
+                       'SPI0 (shared bus)', 'start', size=13, weight='bold'))
+    trunk_x = pico_x + pico_w + 70
+    for i, (pico_label, sig, color) in enumerate(shared_signals):
+        y = spi_row_top + i * spi_row_gap
+        stub, x_end = pin_stub(pico_x + pico_w, y, pico_label, 'right', color, length=18)
+        svg.append(wire(x_end, y, trunk_x, y, color))
+        svg.append(stub)
+        for lx in (lis3dh_x1, lis3dh_x2):
+            svg.append(wire(trunk_x, y, lx, y, color))
+
+    for lx, cs_pin, title in ((lis3dh_x1, 'GP22', 'LIS3DH #1'),
+                              (lis3dh_x2, 'GP2', 'LIS3DH #2')):
+        svg.append(box(lx, lis3dh_y, lis3dh_w, lis3dh_h, title))
+        rows_local = [('VCC', COLORS['power']), ('GND', COLORS['gnd']),
+                     ('SCK', COLORS['sig2']), ('SDI', COLORS['sig3']),
+                     ('SDO', COLORS['sig4']),
+                     (f'CS ← {cs_pin} (not shared)', COLORS['muted'])]
+        for i, (label, color) in enumerate(rows_local):
+            yy = lis3dh_y + 34 + i * 20
+            svg.append(f'<circle cx="{lx + 14}" cy="{yy - 4}" r="3" fill="{color}"/>')
+            svg.append(f'<text x="{lx + 24}" y="{yy}" {FONT} font-size="11.5" '
+                       f'fill="#111827">{label}</text>')
+
+    svg.append(legend(40, H - 46, [
+        (COLORS['power'], 'power'),
+        (COLORS['gnd'], 'ground'),
+    ]))
+    svg.append(caption(W, H - 10,
+                       'GPIO assignments verified from .ini/firmware source only -- '
+                       'circuit not yet physically built (see README.md)'))
+    svg.append(svg_footer())
+    return '\n'.join(svg)
+
+
 if __name__ == '__main__':
     out_dir = 'docs/wiring'
     os.makedirs(out_dir, exist_ok=True)
@@ -279,4 +389,6 @@ if __name__ == '__main__':
         f.write(make_mic())
     with open(f'{out_dir}/sht35.svg', 'w') as f:
         f.write(make_sht35())
+    with open(f'{out_dir}/dpg_x95840w_lis3dhx2.svg', 'w') as f:
+        f.write(make_dpg_x95840w_lis3dhx2())
     print('wrote', out_dir)
