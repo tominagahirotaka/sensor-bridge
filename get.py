@@ -9,13 +9,31 @@ import multiprocessing
 import os
 import sys
 
-from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QApplication
+from timed_import import timed_import
 
-import mylib.communicate as comm
-import mylib.i18n as i18n
-import mylib.window as win
-from mylib.i18n import t
+# Fixed position/total for every heavy import this file times -- see
+# plot.py's own _TOTAL/timed_import usage for why (antivirus real-time
+# scanning of a compiled extension, or a slow network-mounted profile
+# dir, can make one of these take a very long time on some Windows lab
+# machines; these numbered, timestamped lines make it possible to tell
+# which one, instead of the terminal just silently sitting there).
+_TOTAL = 4
+
+with timed_import('PyQt5', 1, _TOTAL):
+    from PyQt5.QtGui import QIcon
+    from PyQt5.QtWidgets import QApplication
+# mylib/__init__.py itself imports matplotlib (for font setup), so this
+# first mylib.* import is the one that pays for that -- timing it here
+# rather than leaving it silently bundled into whatever imported mylib
+# first.
+with timed_import('mylib.communicate (+ matplotlib font setup)', 2, _TOTAL):
+    import mylib.communicate as comm
+with timed_import('mylib.i18n', 3, _TOTAL):
+    import mylib.i18n as i18n
+    from mylib.i18n import t
+with timed_import('mylib.window', 4, _TOTAL):
+    import mylib.window as win
+
 from version import __version__
 
 

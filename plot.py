@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import contextlib
 import copy
 import json
 import os
@@ -19,41 +18,23 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
+from timed_import import timed_import
 
 # Fixed position/total for every heavy import this file times, so the
-# printed "[n/5]" stays consistent no matter when each one actually runs
-# (the first 4 always run at startup, in this order; PyPDF2 only runs
-# later, on PDF export -- see append_window_to_pdf()).
-_TIMED_IMPORT_TOTAL = 5
+# printed "[n/6]" stays consistent no matter when each one actually runs
+# (the first 4 always run at startup, in this order; mylib.plot_utils and
+# PyPDF2 only run later, deferred until actually needed -- see main() and
+# append_window_to_pdf()).
+_TOTAL = 6
 
-
-@contextlib.contextmanager
-def _timed_import(label, step):
-    """Print progress before/after an import, so a genuinely slow one
-    (antivirus real-time scanning of a compiled extension, a slow
-    network-mounted profile dir -- reported by a student whose terminal
-    just sat there with no output during a multi-minute scipy/PyPDF2
-    import) shows up as a specific, timestamped, numbered line instead of
-    a silently frozen terminal. flush=True matters here: stdout is
-    line-buffered on a real terminal but fully buffered when redirected
-    (e.g. into a log file), so without it these lines could sit in the
-    buffer for the whole hang instead of appearing when they're printed."""
-    prefix = f'[{step}/{_TIMED_IMPORT_TOTAL}]'
-    print(f'[INFO] {prefix} importing {label}...', flush=True)
-    t0 = time.time()
-    yield
-    print(f'[INFO] {prefix} ...{label} imported ({time.time() - t0:.1f}s)', flush=True)
-
-
-with _timed_import('numpy', 1):
+with timed_import('numpy', 1, _TOTAL):
     import numpy as np
-with _timed_import('pandas', 2):
+with timed_import('pandas', 2, _TOTAL):
     import pandas as pd
-with _timed_import('PyQt5', 3):
+with timed_import('PyQt5', 3, _TOTAL):
     from PyQt5.QtCore import Qt, QRect, QSizeF, QTimer
     from PyQt5.QtGui import QIcon, QPainter, QPdfWriter
     from PyQt5.QtSvg import QSvgGenerator
@@ -61,10 +42,15 @@ with _timed_import('PyQt5', 3):
                                  QGroupBox, QGridLayout, QLabel, QMainWindow,
                                  QMenu, QMessageBox, QPushButton, QVBoxLayout,
                                  QWidget)
+# mylib/__init__.py itself imports matplotlib (for font setup), so this
+# first mylib.* import is the one that pays for that -- timing it here
+# rather than leaving it silently bundled into whatever imported mylib
+# first.
+with timed_import('mylib (matplotlib font setup + i18n)', 4, _TOTAL):
+    import mylib.i18n as i18n
+    from mylib.debug_utils import debug_print
+    from mylib.i18n import t
 
-import mylib.i18n as i18n
-from mylib.debug_utils import debug_print
-from mylib.i18n import t
 from version import __version__
 
 
@@ -947,7 +933,7 @@ def append_window_to_pdf(window, existing_pdf_path, dpi=300):
     # observed to hang for a long time on import on some Windows lab
     # machines (see the scipy.signal comment in main()) -- importing it
     # only here keeps startup and non-PDF exports unaffected.
-    with _timed_import('PyPDF2', 5):
+    with timed_import('PyPDF2', 6, _TOTAL):
         from PyPDF2 import PdfMerger
 
     # write out to a temporary PDF
@@ -1287,7 +1273,7 @@ def main():
     # exactly this import. Importing it here instead of at module load time
     # means --help (and any other argparse error/exit) stays fast regardless.
     global pltutils, WaveletParams
-    with _timed_import('mylib.plot_utils (scipy.signal)', 4):
+    with timed_import('mylib.plot_utils (scipy.signal)', 5, _TOTAL):
         import mylib.plot_utils as pltutils
         from mylib.plot_utils import WaveletParams
 
