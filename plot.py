@@ -3,9 +3,14 @@
 sensor-bridge: graph display module
 Displays acquired sensor data in real time.
 """
+# Defers type-annotation evaluation (e.g. build_wavelet_params's "->
+# WaveletParams" below) so mylib.plot_utils can be imported lazily -- see
+# the comment above its import in main().
+from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import copy
 import json
 import os
@@ -14,25 +19,52 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 
-import numpy as np
-import pandas as pd
-from PyPDF2 import PdfMerger
-from PyQt5.QtCore import Qt, QRect, QSizeF, QTimer
-from PyQt5.QtGui import QIcon, QPainter, QPdfWriter
-from PyQt5.QtSvg import QSvgGenerator
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog,
-                             QGroupBox, QGridLayout, QLabel, QMainWindow,
-                             QMenu, QMessageBox, QPushButton, QVBoxLayout,
-                             QWidget)
+
+# Fixed position/total for every heavy import this file times, so the
+# printed "[n/5]" stays consistent no matter when each one actually runs
+# (the first 4 always run at startup, in this order; PyPDF2 only runs
+# later, on PDF export -- see append_window_to_pdf()).
+_TIMED_IMPORT_TOTAL = 5
+
+
+@contextlib.contextmanager
+def _timed_import(label, step):
+    """Print progress before/after an import, so a genuinely slow one
+    (antivirus real-time scanning of a compiled extension, a slow
+    network-mounted profile dir -- reported by a student whose terminal
+    just sat there with no output during a multi-minute scipy/PyPDF2
+    import) shows up as a specific, timestamped, numbered line instead of
+    a silently frozen terminal. flush=True matters here: stdout is
+    line-buffered on a real terminal but fully buffered when redirected
+    (e.g. into a log file), so without it these lines could sit in the
+    buffer for the whole hang instead of appearing when they're printed."""
+    prefix = f'[{step}/{_TIMED_IMPORT_TOTAL}]'
+    print(f'[INFO] {prefix} importing {label}...', flush=True)
+    t0 = time.time()
+    yield
+    print(f'[INFO] {prefix} ...{label} imported ({time.time() - t0:.1f}s)', flush=True)
+
+
+with _timed_import('numpy', 1):
+    import numpy as np
+with _timed_import('pandas', 2):
+    import pandas as pd
+with _timed_import('PyQt5', 3):
+    from PyQt5.QtCore import Qt, QRect, QSizeF, QTimer
+    from PyQt5.QtGui import QIcon, QPainter, QPdfWriter
+    from PyQt5.QtSvg import QSvgGenerator
+    from PyQt5.QtWidgets import (QApplication, QCheckBox, QFileDialog,
+                                 QGroupBox, QGridLayout, QLabel, QMainWindow,
+                                 QMenu, QMessageBox, QPushButton, QVBoxLayout,
+                                 QWidget)
 
 import mylib.i18n as i18n
-import mylib.plot_utils as pltutils
 from mylib.debug_utils import debug_print
 from mylib.i18n import t
-from mylib.plot_utils import WaveletParams  # import as needed
 from version import __version__
 
 
@@ -911,6 +943,13 @@ class MainWindow(QMainWindow):
 
 
 def append_window_to_pdf(window, existing_pdf_path, dpi=300):
+    # Deferred: only needed for PDF export, and PyPDF2 has also been
+    # observed to hang for a long time on import on some Windows lab
+    # machines (see the scipy.signal comment in main()) -- importing it
+    # only here keeps startup and non-PDF exports unaffected.
+    with _timed_import('PyPDF2', 5):
+        from PyPDF2 import PdfMerger
+
     # write out to a temporary PDF
     temp_pdf = existing_pdf_path + ".temp.pdf"
     _save_window_as_pdf(window, temp_pdf, dpi)
@@ -1238,6 +1277,19 @@ def build_wavelet_params(args) -> WaveletParams:
 
 def main():
     args = parse_args()
+
+    # Deferred until after argparse has had a chance to handle -h/--help
+    # (which exits right above, via parse_args()) and exit fast:
+    # mylib.plot_utils pulls in scipy.signal, a compiled extension that has
+    # been observed to take a very long time to import on some Windows lab
+    # machines (antivirus real-time scanning, slow network-mounted profile
+    # dirs) -- confirmed via a student report of `plot.py -h` hanging on
+    # exactly this import. Importing it here instead of at module load time
+    # means --help (and any other argparse error/exit) stays fast regardless.
+    global pltutils, WaveletParams
+    with _timed_import('mylib.plot_utils (scipy.signal)', 4):
+        import mylib.plot_utils as pltutils
+        from mylib.plot_utils import WaveletParams
 
     # argv[0] becomes the X11 WM_CLASS (verified via xprop); Qt's
     # setDesktopFileName() only affects the Wayland app-id, so both are
