@@ -216,6 +216,26 @@ python get.py
   pip install -r requirements.txt
   ```
 
+  On Windows, consider immediately following this with a one-time
+  "warm-up" of `plot.py`'s heaviest dependency:
+
+  ```bash
+  python -c "import scipy.signal"
+  ```
+
+  On a personal (BYOD) Windows machine, `scipy.signal`'s compiled
+  extensions being scanned by antivirus software for the first time has
+  been observed to make `plot.py`'s startup take several minutes on
+  first run -- long enough to look like a hang (`get.py` and everything
+  else `plot.py` imports are unaffected; running `plot.py` prints
+  numbered `[INFO] [n/6] importing ...` lines at startup, so if this
+  happens, `[5/6] mylib.plot_utils (scipy.signal)` is the one to watch).
+  Running the warm-up once, right after installing dependencies, pays
+  that cost up front instead of during an actual experiment session --
+  most antivirus software caches per-file scan results (by hash), so the
+  same files should be skipped on later scans, including after a reboot,
+  as long as they haven't changed.
+
 ## Quick start
 
 ### Live acquisition (`get.py`)
