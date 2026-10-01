@@ -24,11 +24,11 @@ from datetime import datetime
 from timed_import import timed_import
 
 # Fixed position/total for every heavy import this file times, so the
-# printed "[n/6]" stays consistent no matter when each one actually runs
-# (the first 4 always run at startup, in this order; mylib.plot_utils and
+# printed "[n/7]" stays consistent no matter when each one actually runs
+# (the first 5 always run at startup, in this order; mylib.plot_utils and
 # PyPDF2 only run later, deferred until actually needed -- see main() and
 # append_window_to_pdf()).
-_TOTAL = 6
+_TOTAL = 7
 
 with timed_import('numpy', 1, _TOTAL):
     import numpy as np
@@ -50,8 +50,11 @@ with timed_import('mylib (matplotlib font setup + i18n)', 4, _TOTAL):
     import mylib.i18n as i18n
     from mylib.debug_utils import debug_print
     from mylib.i18n import t
-
-from version import __version__
+# version.py shells out to `git describe` on a plain checkout (not a
+# `git archive` export, which bakes the version in as plain text
+# instead -- see version.py) -- timed for the same reason as the rest.
+with timed_import('version (git describe)', 5, _TOTAL):
+    from version import __version__
 
 
 def toStr(filter):
@@ -933,7 +936,7 @@ def append_window_to_pdf(window, existing_pdf_path, dpi=300):
     # observed to hang for a long time on import on some Windows lab
     # machines (see the scipy.signal comment in main()) -- importing it
     # only here keeps startup and non-PDF exports unaffected.
-    with timed_import('PyPDF2', 6, _TOTAL):
+    with timed_import('PyPDF2', 7, _TOTAL):
         from PyPDF2 import PdfMerger
 
     # write out to a temporary PDF
@@ -1273,7 +1276,7 @@ def main():
     # exactly this import. Importing it here instead of at module load time
     # means --help (and any other argparse error/exit) stays fast regardless.
     global pltutils, WaveletParams
-    with timed_import('mylib.plot_utils (scipy.signal)', 5, _TOTAL):
+    with timed_import('mylib.plot_utils (scipy.signal)', 6, _TOTAL):
         import mylib.plot_utils as pltutils
         from mylib.plot_utils import WaveletParams
 

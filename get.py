@@ -17,7 +17,7 @@ from timed_import import timed_import
 # dir, can make one of these take a very long time on some Windows lab
 # machines; these numbered, timestamped lines make it possible to tell
 # which one, instead of the terminal just silently sitting there).
-_TOTAL = 4
+_TOTAL = 5
 
 with timed_import('PyQt5', 1, _TOTAL):
     from PyQt5.QtGui import QIcon
@@ -33,8 +33,11 @@ with timed_import('mylib.i18n', 3, _TOTAL):
     from mylib.i18n import t
 with timed_import('mylib.window', 4, _TOTAL):
     import mylib.window as win
-
-from version import __version__
+# version.py shells out to `git describe` on a plain checkout (not a
+# `git archive` export, which bakes the version in as plain text
+# instead -- see version.py) -- timed for the same reason as the rest.
+with timed_import('version (git describe)', 5, _TOTAL):
+    from version import __version__
 
 
 def make_window(argv, args, board, win_index=0, num_boards=1):
