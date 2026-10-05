@@ -243,15 +243,19 @@ python get.py
     control policy` (wording varies): this is not a slow scan and
     re-running the warm-up will not fix it -- some component of
     scipy.signal's compiled extensions is being actively blocked from
-    loading at all, not merely scanned slowly. The most likely cause on
-    a personal Windows 11 machine is **Smart App Control** (Settings ->
-    Privacy & security -> Windows security -> App & browser control):
-    once it switches itself from "Evaluation" to "On", Windows no
-    longer offers a way to allow a specific blocked file -- the only
-    way back to "Off" is reinstalling Windows, by Microsoft's own
-    design. Confirm the exact cause (and which policy/file) via the
+    loading at all, not merely scanned slowly. **Confirmed cause and
+    fix on a real student machine**: Windows 11's **Smart App Control**
+    was On, and turning it Off resolved the import immediately. To find
+    it: open Settings and type "Smart" into its own search box --
+    the nested menu path (Privacy & security -> Windows security ->
+    App & browser control) wasn't where that student actually found it,
+    so search is the more reliable way in regardless of exactly where a
+    given Windows 11 build nests the page. Toggling it Off (and later
+    back On, if desired) works directly from that Settings page on
+    current Windows versions -- no reinstall needed. If toggling it
+    doesn't resolve a similar failure, confirm the actual cause via the
     Event Viewer (`eventvwr.msc`) under Applications and Services Logs
-    -> Microsoft -> Windows -> CodeIntegrity (or AppLocker) before
+    -> Microsoft -> Windows -> CodeIntegrity (or AppLocker) instead of
     assuming it's this.
 
 ## Quick start
