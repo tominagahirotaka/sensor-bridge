@@ -223,18 +223,36 @@ python get.py
   python -c "import scipy.signal"
   ```
 
-  On a personal (BYOD) Windows machine, `scipy.signal`'s compiled
-  extensions being scanned by antivirus software for the first time has
-  been observed to make `plot.py`'s startup take several minutes on
-  first run -- long enough to look like a hang (`get.py` and everything
-  else `plot.py` imports are unaffected; running `plot.py` prints
-  numbered `[INFO] [n/6] importing ...` lines at startup, so if this
-  happens, `[5/6] mylib.plot_utils (scipy.signal)` is the one to watch).
-  Running the warm-up once, right after installing dependencies, pays
-  that cost up front instead of during an actual experiment session --
-  most antivirus software caches per-file scan results (by hash), so the
-  same files should be skipped on later scans, including after a reboot,
-  as long as they haven't changed.
+  This surfaces either of two distinct Windows-only problems right away,
+  during setup, instead of mid-experiment (`get.py` and everything else
+  `plot.py` imports are unaffected by either; running `plot.py` prints
+  numbered `[INFO] [n/7] importing ...` lines at startup, so if either
+  happens during real use, `[6/7] mylib.plot_utils (scipy.signal)` is
+  the one to watch):
+
+  - **Slow, but eventually succeeds**: on a personal (BYOD) Windows
+    machine, `scipy.signal`'s compiled extensions being scanned by
+    antivirus software for the first time has been observed to take
+    several minutes on first run -- long enough to look like a hang.
+    Running the warm-up once pays that cost up front; most antivirus
+    software caches per-file scan results (by hash), so the same files
+    should be skipped on later scans, including after a reboot, as long
+    as they haven't changed.
+  - **Fails outright, every time, with an `ImportError`** such as `DLL
+    load failed while importing _fblas: ...blocked by application
+    control policy` (wording varies): this is not a slow scan and
+    re-running the warm-up will not fix it -- some component of
+    scipy.signal's compiled extensions is being actively blocked from
+    loading at all, not merely scanned slowly. The most likely cause on
+    a personal Windows 11 machine is **Smart App Control** (Settings ->
+    Privacy & security -> Windows security -> App & browser control):
+    once it switches itself from "Evaluation" to "On", Windows no
+    longer offers a way to allow a specific blocked file -- the only
+    way back to "Off" is reinstalling Windows, by Microsoft's own
+    design. Confirm the exact cause (and which policy/file) via the
+    Event Viewer (`eventvwr.msc`) under Applications and Services Logs
+    -> Microsoft -> Windows -> CodeIntegrity (or AppLocker) before
+    assuming it's this.
 
 ## Quick start
 
