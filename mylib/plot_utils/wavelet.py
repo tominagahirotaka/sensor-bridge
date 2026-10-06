@@ -50,6 +50,12 @@ class WaveletParams:
     # rangeOfFreq = [1.2, 2.2, 0.001] # frequency [min, max, step]
     range: list = field(default_factory=lambda: [1.2, 3.0, 0.01])
     omega0: float = 6
+    # Unfiltered decimation (plain array striding, no anti-aliasing filter)
+    # applied before the wavelet transform -- swan's cwt_f() can't handle
+    # the full sample rate on long/high-rate recordings. 1 = no decimation
+    # (default); raise it (e.g. 2 = every other sample, the old hardcoded
+    # value) if cwt_f() can't keep up.
+    data_skip: int = 1
 
     def __post_init__(self):
         if not (isinstance(self.range, (list, tuple)) and len(self.range) == 3):
@@ -58,6 +64,8 @@ class WaveletParams:
             raise ValueError("range step and omega0 must be > 0")
         if self.range[0] >= self.range[1]:
             raise ValueError("range[0] must be less than range[1]")
+        if not (isinstance(self.data_skip, int) and self.data_skip >= 1):
+            raise ValueError("data_skip must be an integer >= 1")
 
     def to_dict(self):
         return asdict(self)
@@ -76,7 +84,8 @@ class WaveletParams:
             json.dump(self.to_dict(), f)
 
     def __repr__(self):
-        return f"[INFO] WaveletParams(range={self.range}, omega0={self.omega0})"
+        return (f"[INFO] WaveletParams(range={self.range}, omega0={self.omega0}, "
+                f"data_skip={self.data_skip})")
 
     def __str__(self):
         return self.__repr__()
@@ -85,7 +94,7 @@ class WaveletParams:
 
 
 def do_wavelet_transform(xy, params: WaveletParams = WaveletParams()):
-    data_skip = 2
+    data_skip = params.data_skip
     wv_data = PlotImageData()
     wv_data.xlabel = xy.xlabel
     wv_data.title = 'Scalogram'
@@ -108,7 +117,8 @@ def do_wavelet_transform(xy, params: WaveletParams = WaveletParams()):
     max_power_bpm.xlabel = wv_data.xlabel
 
     for (x, y), l in zip(xy.data, xy.labels):
-        # wavelet transform (data is decimated by half since swan can't handle the full rate)
+        # wavelet transform (unfiltered decimation via params.data_skip --
+        # swan's cwt_f() can't handle the full sample rate)
         x_sub = x[data_skip:-data_skip - 1:data_skip]
         y_sub = y[data_skip:-data_skip - 1:data_skip]
         # run the continuous wavelet transform

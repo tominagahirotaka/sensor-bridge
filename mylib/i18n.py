@@ -445,6 +445,9 @@ MESSAGES = {
     "pu.wavelet_range_max": {"en": "max", "ja": "最大"},
     "pu.wavelet_range_step": {"en": "step", "ja": "刻み幅"},
     "pu.wavelet_omega0_group": {"en": "omega0", "ja": "omega0"},
+    "pu.wavelet_data_skip_group": {
+        "en": "Decimation (no filter, every Nth sample)",
+        "ja": "間引き（無フィルタ、N個おき）"},
 
     "pu.reset_tmin_to_zero": {"en": "Reset t_min to t=0", "ja": "t_min を t=0 にリセット"},
     "pu.history_prefix": {"en": "History: ", "ja": "履歴:"},

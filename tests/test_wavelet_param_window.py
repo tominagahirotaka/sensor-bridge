@@ -13,12 +13,13 @@ from mylib.plot_utils.wavelet import WaveletParams
 
 class TestInitialValues:
     def test_spin_boxes_reflect_the_given_params(self, qapp):
-        params = WaveletParams(range=[1.2, 3.0, 0.01], omega0=6)
+        params = WaveletParams(range=[1.2, 3.0, 0.01], omega0=6, data_skip=4)
         win = WaveletParamWindow(params)
         assert win.range_min.value() == pytest.approx(1.2)
         assert win.range_max.value() == pytest.approx(3.0)
         assert win.range_step.value() == pytest.approx(0.01)
         assert win.omega0.value() == pytest.approx(6)
+        assert win.data_skip.value() == 4
 
 
 class TestApply:
@@ -28,6 +29,7 @@ class TestApply:
         win.range_max.setValue(2.0)
         win.range_step.setValue(0.05)
         win.omega0.setValue(8)
+        win.data_skip.setValue(3)
 
         received = []
         win.execTriggered.connect(lambda p: received.append(p))
@@ -38,6 +40,7 @@ class TestApply:
         assert isinstance(params, WaveletParams)
         assert params.range == [1.0, 2.0, 0.05]
         assert params.omega0 == 8
+        assert params.data_skip == 3
 
     def test_invalid_range_shows_a_warning_and_does_not_emit(self, qapp, monkeypatch):
         win = WaveletParamWindow(WaveletParams())
@@ -69,7 +72,7 @@ class TestSaveParameters:
         win.save_parameters()
 
         saved = json.loads(path.read_text())
-        assert saved == {'range': [1.0, 2.0, 0.1], 'omega0': 5}
+        assert saved == {'range': [1.0, 2.0, 0.1], 'omega0': 5, 'data_skip': 1}
 
 
 class TestLoadParameters:
@@ -80,7 +83,7 @@ class TestLoadParameters:
 
     def test_loads_and_updates_the_spin_boxes(self, qapp, monkeypatch, tmp_path):
         path = tmp_path / 'wavelet_params.json'
-        path.write_text(json.dumps({'range': [2.0, 4.0, 0.02], 'omega0': 7}))
+        path.write_text(json.dumps({'range': [2.0, 4.0, 0.02], 'omega0': 7, 'data_skip': 5}))
 
         win = WaveletParamWindow(WaveletParams())
         monkeypatch.setattr(QFileDialog, 'getOpenFileName',
@@ -91,6 +94,7 @@ class TestLoadParameters:
         assert win.range_max.value() == pytest.approx(4.0)
         assert win.range_step.value() == pytest.approx(0.02)
         assert win.omega0.value() == pytest.approx(7)
+        assert win.data_skip.value() == 5
 
     def test_malformed_json_shows_a_warning_not_a_crash(self, qapp, monkeypatch, tmp_path):
         path = tmp_path / 'bad.json'

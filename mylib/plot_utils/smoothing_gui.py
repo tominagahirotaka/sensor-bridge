@@ -659,6 +659,14 @@ class WaveletParamWindow(QWidget):
         omega0_group.setLayout(omega0_layout)
         layout.addWidget(omega0_group)
 
+        data_skip_group = QGroupBox(tr('pu.wavelet_data_skip_group'))
+        data_skip_layout = QHBoxLayout()
+        self.data_skip = QSpinBox()
+        self.data_skip.setRange(1, 1000)
+        data_skip_layout.addWidget(self.data_skip)
+        data_skip_group.setLayout(data_skip_layout)
+        layout.addWidget(data_skip_group)
+
         self.setLayout(layout)
         self.set_params(params)
 
@@ -667,13 +675,15 @@ class WaveletParamWindow(QWidget):
         self.range_max.setValue(params.range[1])
         self.range_step.setValue(params.range[2])
         self.omega0.setValue(params.omega0)
+        self.data_skip.setValue(params.data_skip)
 
     def current_params(self):
         """Raises ValueError (via WaveletParams's own validation) if the
         current spin-box values don't form a valid range/omega0."""
         return WaveletParams(
             range=[self.range_min.value(), self.range_max.value(), self.range_step.value()],
-            omega0=self.omega0.value())
+            omega0=self.omega0.value(),
+            data_skip=self.data_skip.value())
 
     def on_apply(self):
         try:
