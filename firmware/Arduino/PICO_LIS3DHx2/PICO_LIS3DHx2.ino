@@ -9,14 +9,18 @@
 // two accelerometers and nothing else. See utils.h for the pin
 // assignment.
 //
-// NOTE: The register map, SPI mode (Mode 3), and high-resolution-mode
-// sensitivity table below come from the public LIS3DH datasheet. This
-// sketch has NOT been verified on real hardware (the combined circuit it
-// was extracted from hasn't either -- see README.md's hardware-
-// verification matrix). Before trusting any data, check that who_am_i_1
-// / who_am_i_2 (sent to the PC as parameters, and printed over Serial)
-// read back 0x33 -- that alone confirms wiring, SPI mode, and CS handling
-// are correct for each unit.
+// NOTE: The register map, SPI mode (Mode 3), and sensitivity tables below
+// come from the public LIS3DH datasheet (STMicroelectronics DocID17530
+// Rev 2) -- cross-checked directly against the PDF (Table 4, Table 10,
+// Table 37, Section 8.16-8.18). This sketch has NOT been verified on real
+// hardware (the combined circuit it was extracted from hasn't either --
+// see README.md's hardware-verification matrix); this applies to Normal
+// mode (hr_mode1/hr_mode2) equally -- see the g_per_count comment below
+// for why its conversion factor doesn't need to differ from High-
+// Resolution's despite being otherwise unverified. Before trusting any
+// data, check that who_am_i_1 / who_am_i_2 (sent to the PC as parameters,
+// and printed over Serial) read back 0x33 -- that alone confirms wiring,
+// SPI mode, and CS handling are correct for each unit.
 //
 #include "utils.h"
 char program_name[] = "LIS3DHx2";
@@ -34,7 +38,7 @@ std::map<string, string> params_to = { //  parameters to PC
 uint8_t time_unit;
 uint8_t spi_sck_pin, spi_mosi_pin, spi_miso_pin;
 uint8_t cs_pin1, cs_pin2;
-uint8_t odr1, fs1, odr2, fs2;
+uint8_t odr1, fs1, odr2, fs2, hr_mode1, hr_mode2;
 float g_per_count1, g_per_count2;
 
 #define LIS3DH_WHO_AM_I        0x0F
@@ -45,6 +49,9 @@ float g_per_count1, g_per_count2;
 
 // High-resolution mode sensitivity (mg per 12bit digit), indexed by fs (0=+-2g,1=+-4g,2=+-8g,3=+-16g)
 const float HR_MG_PER_DIGIT[4] = {1.0, 2.0, 4.0, 12.0};
+// Normal mode (10bit) sensitivity is exactly 4x HR's (datasheet Table 4).
+// Documentation cross-check only -- NOT used in g_per_count below.
+const float NORMAL_MG_PER_DIGIT[4] = {4.0, 8.0, 16.0, 48.0};
 
 void initialSetupParam(char ch, string str){
   //
@@ -62,6 +69,11 @@ void initialSetupParam(char ch, string str){
   fs1          = get_int(params_from, "fs1",           0);   // 0=+-2g, 1=+-4g, 2=+-8g, 3=+-16g
   odr2         = get_int(params_from, "odr2",          5);
   fs2          = get_int(params_from, "fs2",           0);
+  // CTRL_REG4's HR bit: 1=High-Resolution (12bit, default), 0=Normal
+  // (10bit, coarser but usable at a higher bandwidth -- ~149Hz HR vs
+  // ~672Hz Normal at the same ODR, per the datasheet).
+  hr_mode1     = get_int(params_from, "hr_mode1",       1);
+  hr_mode2     = get_int(params_from, "hr_mode2",       1);
 
   if (ch == 'i') {
     spi_begin(spi_sck_pin, spi_mosi_pin, spi_miso_pin);
@@ -74,12 +86,21 @@ void initialSetupParam(char ch, string str){
   uint8_t who2 = spi_read_reg(cs_pin2, LIS3DH_WHO_AM_I);
   Serial.print("who_am_i_1=0x"); Serial.println(who1, HEX);  // expect 0x33
   Serial.print("who_am_i_2=0x"); Serial.println(who2, HEX);  // expect 0x33
-  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG1, (odr1 << 4) | 0x07);                  // ODR, Zen/Yen/Xen=1
-  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG4, 0x80 | ((fs1 & 0x03) << 4) | 0x08);   // BDU=1, FS, HR=1
+  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG1, (odr1 << 4) | 0x07);                          // ODR, Zen/Yen/Xen=1
+  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG4,
+               0x80 | ((fs1 & 0x03) << 4) | ((hr_mode1 & 0x01) << 3));                  // BDU=1, FS, HR
   spi_write_reg(cs_pin2, LIS3DH_CTRL_REG1, (odr2 << 4) | 0x07);
-  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG4, 0x80 | ((fs2 & 0x03) << 4) | 0x08);
+  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG4,
+               0x80 | ((fs2 & 0x03) << 4) | ((hr_mode2 & 0x01) << 3));
 
-  g_per_count1 = (HR_MG_PER_DIGIT[fs1 & 0x03] / 1000.0) / 16.0;   // raw 16bit is a left-justified 12bit value
+  // g_per_count is intentionally the same formula regardless of hr_mode:
+  // HR/Normal both place their significant bits left-justified in the
+  // same 16bit register (12bit+4 padding vs 10bit+6 padding), and
+  // Normal's mg/digit is exactly 4x HR's at every FS setting, so
+  // (mg/digit)/divisor is mode-invariant -- see PICO_LIS3DH_SPI.ino's
+  // fuller comment on this (same reasoning, confirmed against the
+  // datasheet, not yet against real Normal-mode hardware).
+  g_per_count1 = (HR_MG_PER_DIGIT[fs1 & 0x03] / 1000.0) / 16.0;
   g_per_count2 = (HR_MG_PER_DIGIT[fs2 & 0x03] / 1000.0) / 16.0;
   //
   // Make parameters
