@@ -2,11 +2,19 @@
 // 2026/09/13
 // H.Tominaga
 //
-// NOTE: The register map, SPI mode (Mode 3), and high-resolution-mode
-// sensitivity table below come from the public LIS3DH datasheet. This
-// sketch has NOT been verified on real hardware. Before trusting any data,
-// check that who_am_i (sent to the PC as a parameter, and printed over
-// Serial) reads back 0x33 -- that alone confirms wiring, SPI mode, and CS
+// NOTE: The register map, SPI mode (Mode 3), and sensitivity tables below
+// come from the public LIS3DH datasheet (STMicroelectronics DocID17530
+// Rev 2) -- cross-checked directly against the PDF (Table 4, Table 10,
+// Table 37, Section 8.16-8.18), not from memory or secondhand summaries.
+// High-Resolution mode (the default, hr_mode=1) has been verified on
+// real hardware (all four board variants; see README.md's hardware-
+// verification matrix). Normal mode (hr_mode=0) is new and NOT yet
+// verified on real hardware -- see the g_per_count comment below for why
+// its conversion factor doesn't need to differ from High-Resolution's
+// (confirmed against the datasheet's own numbers, but not yet against a
+// real Normal-mode reading). Before trusting any data, check that
+// who_am_i (sent to the PC as a parameter, and printed over Serial)
+// reads back 0x33 -- that alone confirms wiring, SPI mode, and CS
 // handling are correct.
 //
 #include "utils.h"
@@ -24,7 +32,7 @@ std::map<string, string> params_to = { //  parameters to PC
 };
 uint8_t time_unit;
 uint8_t cs_pin, sck_pin, mosi_pin, miso_pin;
-uint8_t odr, fs;
+uint8_t odr, fs, hr_mode;
 float g_per_count;
 
 #define LIS3DH_WHO_AM_I        0x0F
@@ -35,6 +43,12 @@ float g_per_count;
 
 // High-resolution mode sensitivity (mg per 12bit digit), indexed by fs (0=+-2g,1=+-4g,2=+-8g,3=+-16g)
 const float HR_MG_PER_DIGIT[4] = {1.0, 2.0, 4.0, 12.0};
+// Normal mode (10bit) sensitivity is exactly 4x HR's, per the datasheet's
+// own mechanical-characteristics table (not derived/guessed -- confirmed
+// from the datasheet directly). Kept only as a documentation cross-check;
+// NOT used in g_per_count below, which intentionally stays HR-mode-shaped
+// in both modes -- see the comment there for why.
+const float NORMAL_MG_PER_DIGIT[4] = {4.0, 8.0, 16.0, 48.0};
 
 void initialSetupParam(char ch, string str){
   //
@@ -49,16 +63,39 @@ void initialSetupParam(char ch, string str){
   miso_pin  = get_int(params_from, "spi_miso_pin", 16);   // SPI0 default (RX)
   odr       = get_int(params_from, "odr",           5);   // CTRL_REG1 ODR field; 5 = 100Hz
   fs        = get_int(params_from, "fs",            0);   // 0=+-2g, 1=+-4g, 2=+-8g, 3=+-16g
+  // CTRL_REG4's HR bit: 1=High-Resolution (12bit, the long-standing
+  // default), 0=Normal (10bit, coarser but usable at a higher bandwidth --
+  // ~149Hz HR vs ~672Hz Normal at the same ODR, per the datasheet).
+  hr_mode   = get_int(params_from, "hr_mode",       1);
 
   if (ch == 'i') spi_begin(cs_pin, sck_pin, mosi_pin, miso_pin);
 
   // Deviceにモードの設定cmd送り check existence
   uint8_t who = spi_read_reg(cs_pin, LIS3DH_WHO_AM_I);
   Serial.print("who_am_i=0x"); Serial.println(who, HEX);  // expect 0x33
-  spi_write_reg(cs_pin, LIS3DH_CTRL_REG1, (odr << 4) | 0x07);                  // ODR, Zen/Yen/Xen=1
-  spi_write_reg(cs_pin, LIS3DH_CTRL_REG4, 0x80 | ((fs & 0x03) << 4) | 0x08);   // BDU=1, FS, HR=1
+  spi_write_reg(cs_pin, LIS3DH_CTRL_REG1, (odr << 4) | 0x07);                          // ODR, Zen/Yen/Xen=1
+  spi_write_reg(cs_pin, LIS3DH_CTRL_REG4,
+               0x80 | ((fs & 0x03) << 4) | ((hr_mode & 0x01) << 3));                  // BDU=1, FS, HR
 
-  g_per_count = (HR_MG_PER_DIGIT[fs & 0x03] / 1000.0) / 16.0;   // raw 16bit is a left-justified 12bit value
+  // Deliberately NOT switched to NORMAL_MG_PER_DIGIT/64.0 when hr_mode=0:
+  // both modes place their significant bits left-justified in the same
+  // 16bit register (HR: 12bit + 4 padding bits -> /16; Normal: 10bit + 6
+  // padding bits -> /64 -- "left-justified" per Section 8.16-8.18, bit
+  // counts per Table 10's "12-bit"/"10-bit data output"), and Normal's
+  // mg/digit is exactly 4x HR's at every FS setting (Table 4), so
+  // (mg/digit)/divisor is mode-invariant -- e.g. at FS=+-2g, HR gives
+  // 1/1000/16 and Normal gives 4/1000/64, both 0.0000625 g per raw LSB
+  // (checked at every FS setting, not just this one). This conversion
+  // formula therefore already produces correct g values applied directly
+  // to the raw (unshifted) register value in EITHER mode; only the
+  // register bit changes. The mg/digit table and bit-justification are
+  // confirmed straight from the datasheet (DocID17530 Rev 2), but the
+  // overall result hasn't yet been checked against a real Normal-mode
+  // reading -- the simplest check is comparing a static HR-mode reading
+  // against a Normal-mode reading in the same orientation; they should
+  // agree (Normal's will just be more quantized/coarser), not differ by
+  // a factor of ~4.
+  g_per_count = (HR_MG_PER_DIGIT[fs & 0x03] / 1000.0) / 16.0;
   //
   // Make parameters
   //
