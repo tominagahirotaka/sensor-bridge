@@ -195,6 +195,13 @@ class ApplicationWindow(QMainWindow):
             return None           # Check changed or not?
         self.on_stop_button()
         self.rcv.change_env_set(qDia.result)
+        # Re-apply each plot's Y-range now that self.board.XXX reflects the
+        # new parameters -- a 'limit' tuple that depends on e.g.
+        # self.board.fs (Full Scale) was otherwise frozen at whatever it
+        # resolved to when the window first opened, since initCanvas()
+        # (and the PlotItems it builds) is never re-run after this point.
+        figs = eval(self.code['figs'], globals(), locals())
+        self.figure.refresh_y_ranges(figs)
         if 'after_param_setting_window' in self.code:
             exec(self.code['after_param_setting_window'], globals(), locals())  # Post-Processing
         debug_print(self.args, f'{self.rcv.p.env_set=}')

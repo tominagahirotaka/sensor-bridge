@@ -327,6 +327,47 @@ class FigureQtPG:
         except (IndexError, TypeError, ValueError):
             return None
 
+    def _compute_ylim(self, dic):
+        """Resolve one figs entry's y-axis limit: 'auto' pulls from the
+        board's own lim_auto_raw/lim_auto_func tables (board-reported
+        ranges), a fixed (lo, hi) tuple (which may itself reference
+        self.board.XXX, e.g. Full Scale -- see LIS3DH.ini's figs) is used
+        as-is, None means no limit. Shared by _init_fig (initial plot
+        construction) and refresh_y_ranges (re-applied after a parameter
+        change that changes what a fixed tuple should now resolve to)."""
+        data_num = dic['data'][0][:-1]
+        tmp = []
+        for i_lim, num in enumerate(data_num):
+            if dic['limit'][i_lim] == 'auto':
+                raw_flag = dic['data'][0][-1]['raw'][i_lim]
+                if raw_flag:
+                    tmp.append(self.board.lim_auto_raw[
+                        self.board.structure[num][2]])
+                else:
+                    tmp.append(self.board.lim_auto_func[
+                        self.board.structure[num][2]])
+            elif dic['limit'][i_lim] is not None:
+                tmp.append(dic['limit'][i_lim])
+        return tmp[-1] if tmp else None  # the last element is always the y range (allows for data_num having 2 elements, e.g. x,y)
+
+    def refresh_y_ranges(self, figs):
+        """Re-apply each plot's Y-range from a freshly re-evaluated figs
+        list (same shape as the one passed to __init__), without
+        rebuilding the plots themselves. The PlotItems built in _init_fig
+        are otherwise never revisited after their one-time construction,
+        so e.g. a 'limit' tuple that depends on self.board.fs (Full
+        Scale) would silently keep showing whatever range was in effect
+        when the window first opened, even after Full Scale is changed
+        live via the Parameter Setting dialog -- call this right after
+        such a change (see window.py's on_param_setting_button) to pick
+        up the new value."""
+        new_figs = figs[:-1]
+        for k, lst in enumerate(new_figs):
+            for j, dic in enumerate(lst):
+                ylim = self._compute_ylim(dic)
+                if ylim is not None:
+                    self.plots[k][j].setYRange(float(ylim[0]), float(ylim[1]), padding=0)
+
     def _init_fig(self, figs):
         self.figs, self.args = figs[:-1], figs[-1]
         n_rows, n_cols = np.array(self.figs).shape
@@ -409,28 +450,9 @@ class FigureQtPG:
                             p.setLabel('bottom', xlabel)
 
                 # x/y limit
-                data_num = dic['data'][0][:-1]
-                tmp = []
-                for i_lim, num in enumerate(data_num):
-                    if dic['limit'][i_lim] == 'auto':
-                        raw_flag = dic['data'][0][-1]['raw'][i_lim]
-                        if raw_flag:
-                            tmp.append(self.board.lim_auto_raw[
-                                self.board.structure[num][2]])
-                        else:
-                            tmp.append(self.board.lim_auto_func[
-                                self.board.structure[num][2]])
-                    elif dic['limit'][i_lim] is not None:
-                        tmp.append(dic['limit'][i_lim])
-
                 p.setXRange(0, self.board.time_width, padding=0)
 
-                # if len(tmp) >= 1 and tmp[0] is not None:
-                #     p.setYRange(float(tmp[0][0]), float(tmp[0][1]), padding=0)
-                #     p.disableAutoRange()
-
-                # to also allow for data_num having 2 elements (x, y)
-                ylim = tmp[-1]  # the last element is always the y range
+                ylim = self._compute_ylim(dic)
                 if ylim is not None:
                     p.setYRange(float(ylim[0]), float(ylim[1]), padding=0)
                     p.disableAutoRange()
