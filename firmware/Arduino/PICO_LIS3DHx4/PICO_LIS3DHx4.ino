@@ -8,14 +8,23 @@
 //
 // NOTE: not yet verified on real hardware -- needs four physical LIS3DH
 // units and only one is currently on hand (see README.md's hardware-
-// verification matrix); this applies to Normal mode (hr_mode1-4) equally
-// -- see the g_per_count comment below for why its conversion factor
-// doesn't need to differ from High-Resolution's despite being otherwise
-// unverified (reasoning confirmed against the datasheet,
-// STMicroelectronics DocID17530 Rev 2). Before trusting any data, check
-// that who_am_i_1 through who_am_i_4 (sent to the PC as parameters, and
-// printed over Serial) read back 0x33 -- that alone confirms wiring, SPI
-// mode, and CS handling are correct for each unit.
+// verification matrix); this applies to Normal/Low-power mode
+// (operating_mode1-4) equally -- see the g_per_count comment below for
+// why its conversion factor doesn't need to differ between any of the
+// three modes despite being otherwise unverified (reasoning confirmed
+// against the datasheet, STMicroelectronics DocID17530 Rev 2 -- Table 4,
+// Table 10, Table 12, Table 31, Table 37, Section 8.16-8.18). Before
+// trusting any data, check that who_am_i_1 through who_am_i_4 (sent to
+// the PC as parameters, and printed over Serial) read back 0x33 -- that
+// alone confirms wiring, SPI mode, and CS handling are correct for each
+// unit.
+//
+// Naming note: the datasheet's own term for the 3-way HR/Normal/Low-power
+// choice is "operating mode" (Section 3.2.1's title, Table 10's own
+// heading) -- deliberately not "resolution_mode" or "power_mode", since
+// neither axis alone describes all three: Normal and High-Resolution
+// differ only in resolution (Table 12 shows identical current consumption
+// at every ODR), while Low-power differs in both resolution AND power.
 //
 #include "utils.h"
 char program_name[] = "LIS3DHx4";
@@ -34,7 +43,7 @@ uint8_t time_unit;
 uint8_t spi_sck_pin, spi_mosi_pin, spi_miso_pin;
 uint8_t cs_pin1, cs_pin2, cs_pin3, cs_pin4;
 uint8_t odr1, fs1, odr2, fs2, odr3, fs3, odr4, fs4;
-uint8_t hr_mode1, hr_mode2, hr_mode3, hr_mode4;
+uint8_t operating_mode1, operating_mode2, operating_mode3, operating_mode4;
 float g_per_count1, g_per_count2, g_per_count3, g_per_count4;
 
 #define LIS3DH_WHO_AM_I        0x0F
@@ -45,9 +54,10 @@ float g_per_count1, g_per_count2, g_per_count3, g_per_count4;
 
 // High-resolution mode sensitivity (mg per 12bit digit), indexed by fs (0=+-2g,1=+-4g,2=+-8g,3=+-16g)
 const float HR_MG_PER_DIGIT[4] = {1.0, 2.0, 4.0, 12.0};
-// Normal mode (10bit) sensitivity is exactly 4x HR's (datasheet Table 4).
+// Normal/Low-power sensitivity is exactly 4x/16x HR's (datasheet Table 4).
 // Documentation cross-check only -- NOT used in g_per_count below.
 const float NORMAL_MG_PER_DIGIT[4] = {4.0, 8.0, 16.0, 48.0};
+const float LOW_POWER_MG_PER_DIGIT[4] = {16.0, 32.0, 64.0, 192.0};
 
 void initialSetupParam(char ch, string str){
   //
@@ -63,7 +73,9 @@ void initialSetupParam(char ch, string str){
   cs_pin2      = get_int(params_from, "spi_cs_pin2",  20);   // LIS3DH #2 (closest free pin to the bus)
   cs_pin3      = get_int(params_from, "spi_cs_pin3",  21);   // LIS3DH #3 (next-closest free pin)
   cs_pin4      = get_int(params_from, "spi_cs_pin4",  22);   // LIS3DH #4 (next-closest free pin after that)
-  odr1         = get_int(params_from, "odr1",          5);   // CTRL_REG1 ODR field; 5 = 100Hz
+  // CTRL_REG1 ODR field; 5=100Hz. 8/9/10 are the three fastest choices --
+  // see PICO_LIS3DH_SPI.ino's fuller comment on the 8/9/10 scheme.
+  odr1         = get_int(params_from, "odr1",          5);
   fs1          = get_int(params_from, "fs1",           0);   // 0=+-2g, 1=+-4g, 2=+-8g, 3=+-16g
   odr2         = get_int(params_from, "odr2",          5);
   fs2          = get_int(params_from, "fs2",           0);
@@ -71,13 +83,13 @@ void initialSetupParam(char ch, string str){
   fs3          = get_int(params_from, "fs3",           0);
   odr4         = get_int(params_from, "odr4",          5);
   fs4          = get_int(params_from, "fs4",           0);
-  // CTRL_REG4's HR bit: 1=High-Resolution (12bit, default), 0=Normal
-  // (10bit, coarser but usable at a higher bandwidth -- ~149Hz HR vs
-  // ~672Hz Normal at the same ODR, per the datasheet).
-  hr_mode1     = get_int(params_from, "hr_mode1",       1);
-  hr_mode2     = get_int(params_from, "hr_mode2",       1);
-  hr_mode3     = get_int(params_from, "hr_mode3",       1);
-  hr_mode4     = get_int(params_from, "hr_mode4",       1);
+  // Operating mode (datasheet's own term, Table 10): 0=Low-power (8bit),
+  // 1=Normal (10bit), 2=High-Resolution (12bit, default). Overridden to
+  // Low-power regardless of this setting when the matching odr is 8 or 10.
+  operating_mode1 = get_int(params_from, "operating_mode1", 2);
+  operating_mode2 = get_int(params_from, "operating_mode2", 2);
+  operating_mode3 = get_int(params_from, "operating_mode3", 2);
+  operating_mode4 = get_int(params_from, "operating_mode4", 2);
 
   if (ch == 'i') {
     spi_begin(spi_sck_pin, spi_mosi_pin, spi_miso_pin);
@@ -86,6 +98,23 @@ void initialSetupParam(char ch, string str){
     spi_cs_setup(cs_pin3);
     spi_cs_setup(cs_pin4);
   }
+
+  bool force_lp1 = (odr1 == 8 || odr1 == 10);
+  bool force_lp2 = (odr2 == 8 || odr2 == 10);
+  bool force_lp3 = (odr3 == 8 || odr3 == 10);
+  bool force_lp4 = (odr4 == 8 || odr4 == 10);
+  uint8_t odr1_reg_code = (odr1 == 10) ? 9 : odr1;  // 10 shares code 1001 with 9
+  uint8_t odr2_reg_code = (odr2 == 10) ? 9 : odr2;
+  uint8_t odr3_reg_code = (odr3 == 10) ? 9 : odr3;
+  uint8_t odr4_reg_code = (odr4 == 10) ? 9 : odr4;
+  uint8_t lpen1_bit = (force_lp1 || operating_mode1 == 0) ? 1 : 0;
+  uint8_t lpen2_bit = (force_lp2 || operating_mode2 == 0) ? 1 : 0;
+  uint8_t lpen3_bit = (force_lp3 || operating_mode3 == 0) ? 1 : 0;
+  uint8_t lpen4_bit = (force_lp4 || operating_mode4 == 0) ? 1 : 0;
+  uint8_t hr1_bit   = (!lpen1_bit && operating_mode1 == 2) ? 1 : 0;  // LPen=1,HR=1 not allowed
+  uint8_t hr2_bit   = (!lpen2_bit && operating_mode2 == 2) ? 1 : 0;
+  uint8_t hr3_bit   = (!lpen3_bit && operating_mode3 == 2) ? 1 : 0;
+  uint8_t hr4_bit   = (!lpen4_bit && operating_mode4 == 2) ? 1 : 0;
 
   // Deviceにモードの設定cmd送り check existence (LIS3DH x4)
   uint8_t who1 = spi_read_reg(cs_pin1, LIS3DH_WHO_AM_I);
@@ -96,21 +125,18 @@ void initialSetupParam(char ch, string str){
   Serial.print("who_am_i_2=0x"); Serial.println(who2, HEX);  // expect 0x33
   Serial.print("who_am_i_3=0x"); Serial.println(who3, HEX);  // expect 0x33
   Serial.print("who_am_i_4=0x"); Serial.println(who4, HEX);  // expect 0x33
-  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG1, (odr1 << 4) | 0x07);                          // ODR, Zen/Yen/Xen=1
-  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG4,
-               0x80 | ((fs1 & 0x03) << 4) | ((hr_mode1 & 0x01) << 3));                  // BDU=1, FS, HR
-  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG1, (odr2 << 4) | 0x07);
-  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG4,
-               0x80 | ((fs2 & 0x03) << 4) | ((hr_mode2 & 0x01) << 3));
-  spi_write_reg(cs_pin3, LIS3DH_CTRL_REG1, (odr3 << 4) | 0x07);
-  spi_write_reg(cs_pin3, LIS3DH_CTRL_REG4,
-               0x80 | ((fs3 & 0x03) << 4) | ((hr_mode3 & 0x01) << 3));
-  spi_write_reg(cs_pin4, LIS3DH_CTRL_REG1, (odr4 << 4) | 0x07);
-  spi_write_reg(cs_pin4, LIS3DH_CTRL_REG4,
-               0x80 | ((fs4 & 0x03) << 4) | ((hr_mode4 & 0x01) << 3));
+  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG1, (odr1_reg_code << 4) | (lpen1_bit << 3) | 0x07);
+  spi_write_reg(cs_pin1, LIS3DH_CTRL_REG4, 0x80 | ((fs1 & 0x03) << 4) | (hr1_bit << 3));
+  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG1, (odr2_reg_code << 4) | (lpen2_bit << 3) | 0x07);
+  spi_write_reg(cs_pin2, LIS3DH_CTRL_REG4, 0x80 | ((fs2 & 0x03) << 4) | (hr2_bit << 3));
+  spi_write_reg(cs_pin3, LIS3DH_CTRL_REG1, (odr3_reg_code << 4) | (lpen3_bit << 3) | 0x07);
+  spi_write_reg(cs_pin3, LIS3DH_CTRL_REG4, 0x80 | ((fs3 & 0x03) << 4) | (hr3_bit << 3));
+  spi_write_reg(cs_pin4, LIS3DH_CTRL_REG1, (odr4_reg_code << 4) | (lpen4_bit << 3) | 0x07);
+  spi_write_reg(cs_pin4, LIS3DH_CTRL_REG4, 0x80 | ((fs4 & 0x03) << 4) | (hr4_bit << 3));
 
-  // g_per_count is intentionally the same formula regardless of hr_mode --
-  // see PICO_LIS3DH_SPI.ino's fuller comment on why this is mode-invariant.
+  // g_per_count is intentionally the same formula regardless of
+  // operating_mode -- see PICO_LIS3DH_SPI.ino's fuller comment on why
+  // this is mode-invariant across all three modes.
   g_per_count1 = (HR_MG_PER_DIGIT[fs1 & 0x03] / 1000.0) / 16.0;
   g_per_count2 = (HR_MG_PER_DIGIT[fs2 & 0x03] / 1000.0) / 16.0;
   g_per_count3 = (HR_MG_PER_DIGIT[fs3 & 0x03] / 1000.0) / 16.0;
@@ -145,13 +171,15 @@ void changeParam(char ch){
   // Time intervals (serial...USB transfer limit, real...real transfer interval)
   //
   serial_time_interval  = int((one_data_byte * 8)  * 1000000.0 * 1.2/ baud);  // micro sec with a 20% margin added
-  // Rough ODR(Hz) lookup for CTRL_REG1's ODR field (index 0-9); used only to avoid polling
-  // faster than any of the four sensors actually produces new samples (the slowest governs).
-  const uint32_t odr_hz[10] = {0, 1, 10, 25, 50, 100, 200, 400, 1600, 1344};
-  uint32_t odr1_interval_us = (odr1 < 10 && odr_hz[odr1] > 0) ? (1000000UL / odr_hz[odr1]) : 10000UL;
-  uint32_t odr2_interval_us = (odr2 < 10 && odr_hz[odr2] > 0) ? (1000000UL / odr_hz[odr2]) : 10000UL;
-  uint32_t odr3_interval_us = (odr3 < 10 && odr_hz[odr3] > 0) ? (1000000UL / odr_hz[odr3]) : 10000UL;
-  uint32_t odr4_interval_us = (odr4 < 10 && odr_hz[odr4] > 0) ? (1000000UL / odr_hz[odr4]) : 10000UL;
+  // Rough ODR(Hz) lookup, indexed by the odr PARAMETER (0-10, not the raw
+  // register code -- index 10 is the "5.376kHz(LP only)" virtual value);
+  // used only to avoid polling faster than any of the four sensors
+  // actually produces new samples (the slowest governs).
+  const uint32_t odr_hz[11] = {0, 1, 10, 25, 50, 100, 200, 400, 1600, 1344, 5376};
+  uint32_t odr1_interval_us = (odr1 < 11 && odr_hz[odr1] > 0) ? (1000000UL / odr_hz[odr1]) : 10000UL;
+  uint32_t odr2_interval_us = (odr2 < 11 && odr_hz[odr2] > 0) ? (1000000UL / odr_hz[odr2]) : 10000UL;
+  uint32_t odr3_interval_us = (odr3 < 11 && odr_hz[odr3] > 0) ? (1000000UL / odr_hz[odr3]) : 10000UL;
+  uint32_t odr4_interval_us = (odr4 < 11 && odr_hz[odr4] > 0) ? (1000000UL / odr_hz[odr4]) : 10000UL;
   real_time_interval = std::max(std::max(std::max(odr1_interval_us, odr2_interval_us),
                                           std::max(odr3_interval_us, odr4_interval_us)),
                                  serial_time_interval);
