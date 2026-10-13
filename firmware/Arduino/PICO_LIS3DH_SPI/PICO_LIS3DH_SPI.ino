@@ -6,14 +6,14 @@
 // come from the public LIS3DH datasheet (STMicroelectronics DocID17530
 // Rev 2) -- cross-checked directly against the PDF (Table 4, Table 10,
 // Table 12, Table 31, Table 37, Section 8.16-8.18), not from memory or
-// secondhand summaries. High-Resolution mode (the default,
-// operating_mode=2) has been verified on real hardware (all four board
-// variants; see README.md's hardware-verification matrix). Normal
-// (operating_mode=1) and Low-power (operating_mode=0) are new and NOT
-// yet verified on real hardware -- see the g_per_count comment below for
-// why its conversion factor doesn't need to differ between any of the
-// three modes (confirmed against the datasheet's own numbers, but not
-// yet against a real Normal/Low-power reading). Before trusting any
+// secondhand summaries. All three operating modes -- High-Resolution
+// (the default, operating_mode=2), Normal (operating_mode=1), and
+// Low-power (operating_mode=0) -- have been verified on real hardware
+// (all four board variants; see README.md's hardware-verification
+// matrix). See the g_per_count comment below for why its conversion
+// factor doesn't need to differ between any of the three modes
+// (confirmed against the datasheet's own numbers, and against real
+// readings in each mode). Before trusting any
 // data, check that who_am_i (sent to the PC as a parameter, and printed
 // over Serial) reads back 0x33 -- that alone confirms wiring, SPI mode,
 // and CS handling are correct.

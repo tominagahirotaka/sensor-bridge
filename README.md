@@ -517,5 +517,10 @@ MIT License -- see [`LICENSE.txt`](LICENSE.txt).
 
 ## Citation
 
-A citation entry will be added once this software has an associated
-publication and archived release (DOI).
+If you use this software, please cite the archived release:
+
+> Tominaga, H. (2026). sensor-bridge (Version v1.3.0) [Software]. Zenodo.
+> https://doi.org/10.5281/zenodo.23331863
+
+A citation entry for the associated software paper will be added once
+it is published.
